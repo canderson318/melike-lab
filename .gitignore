@@ -1,1 +1,4 @@
 data_assimilation_main/
+.gitignore
+.DS_store
+.vscode

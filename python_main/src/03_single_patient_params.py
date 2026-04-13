@@ -101,7 +101,8 @@ for i,col in enumerate(cols):
     axes[i].legend(loc = 'upper right',title = 'Day Delta', bbox_to_anchor = (1.11,1.11))
     axes[i].xaxis.set_major_formatter(mticker.FuncFormatter(lambda x, _: mins_to_timestr(x)))
     plt.setp(axes[i].get_xticklabels(), rotation=45, ha="right")
-fig.tight_layout()
+fig.tight_layout(rect = [0,0,1, 0.97])
+fig.suptitle(f"{pat}\nParameters over time of day colored by day", fontsize = 14, y = 1)
 plt.savefig(out_dir/'param_against_interval_start.pdf')
 
 
@@ -123,6 +124,7 @@ plt.savefig(out_dir/'param_against_interval_start.pdf')
 # plot each var against every other 
 plt.figure(figsize = (10,10))
 sns.pairplot(SUB.loc[:,cols])
+plt.suptitle(f"{pat}\n",y = .99)
 plt.savefig(out_dir/'param_pairplot.pdf')
 
 # corr heatmap
@@ -131,5 +133,6 @@ corr = pd.DataFrame(corr_m, columns = cols.values, index = cols.values)
 
 fig,ax = plt.subplots(figsize = (10,10))
 sns.heatmap(corr, ax = ax, cmap = 'RdBu_r',)
+plt.suptitle(f"{pat}\n Parameter Correlations")
 plt.tight_layout()
 plt.savefig(out_dir/'param_corr_heamap.pdf')

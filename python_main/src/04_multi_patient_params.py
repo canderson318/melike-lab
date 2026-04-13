@@ -85,8 +85,9 @@ SUB = summary.loc[summary.label == window_set].copy()
 
 # log some cols
 cols_to_transform = ['a', 'b', 'rmse', "gamma", "Gb"]
-new_cols = [x+"_log" for x in cols_to_transform]
-transform = lambda x: np.log(np.maximum(x, .01))
+new_cols = [x+"_log1p" for x in cols_to_transform]
+def transform(x):
+    return np.log1p(x.copy())
 SUB[new_cols] = SUB[cols_to_transform].apply(transform)
 
 #\\\\
@@ -119,10 +120,11 @@ for i,col in enumerate(cols):
     axes[i].set_title(f"{col.upper()}")
     handles, labels = axes[i].get_legend_handles_labels()
     axes[i].legend(handles, labels, loc='upper right', title=' Pat', bbox_to_anchor=(1.11, 1.11))
-    axes[i].xaxis.set_major_formatter(mticker.FuncFormatter(lambda x, _: mins_to_timestr(x)))
+    axes[i].xaxis.set_major_formatter(mticker.FuncFormatter(lambda x, _: str(x)+":00"))
     plt.setp(axes[i].get_xticklabels(), rotation=45, ha="right")
-fig.tight_layout()
-plt.savefig(out_dir/'param_against_HROD_boxplots.pdf')
+fig.tight_layout(rect = [0,0,1, 0.97])
+fig.suptitle("Parameters throughout the day", fontsize = 14, y = .999)
+plt.savefig(out_dir/'param_against_HROD_boxplots.pdf', bbox_inches = "tight")
 
 del LINE
 
@@ -149,8 +151,9 @@ for i,col in enumerate(cols):
     axes[i].set_xlabel("Day")
     axes[i].set_ylabel(col.upper())
     axes[i].set_title(f"{col.upper()}")
-    axes[i].legend()
-fig.tight_layout()
+    axes[i].legend(loc='upper right', title=' Pat', bbox_to_anchor=(1.11, 1.11))
+fig.tight_layout(rect = [0,0,1, 0.97])
+fig.suptitle("Parameters across study days", fontsize = 14, y = 1)
 plt.savefig(out_dir/'param_against_deltaday_boxplots.pdf')
 
 del LINE

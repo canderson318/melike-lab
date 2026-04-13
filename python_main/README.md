@@ -32,6 +32,17 @@ Multi-patient parameter analysis. Loads summaries for all patients and outputs t
 - All params vs. time of day (colored by study day, linetype by patient)
 - Boxplots of params by study day with median overlay per patient
 
+## Utils (`src/utils/tools.py`)
+
+| Function | Description |
+|---|---|
+| `mount_odrive(force=False)` | Mount OneDrive via rclone to `~/odrive/home` |
+| `sym_link(real_path, sym_path)` | Create symlink, replacing existing link/dir |
+| `mins_to_timestr(minutes)` | Minutes-since-midnight → `"HH:MM"` string(s) |
+| `timestr_to_mins(string)` | `"HH:MM"` string → minutes-since-midnight |
+| `setPatient(pat)` | Write patient ID to `PAT.txt` |
+| `runPatient(command, pat=None)` | Run MATLAB/Python script; sets patient first if `pat` given |
+
 ## Related
 
 Upstream pipeline: `melike-lab/data_assimilation_main/projects/T1DM/T1D_moving_window_smoother_two_betas.m`

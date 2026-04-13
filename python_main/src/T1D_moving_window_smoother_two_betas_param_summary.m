@@ -6,6 +6,7 @@ clear;clc;
 % patient 
 % pat = "SM002";
 pat = fileread('PAT.txt');
+fprintf("%s\n",pat)
 
 % add scripts to path
 code_dir = '/Users/canderson/Documents/school/local-melike-lab/melike-lab/data_assimilation_main';

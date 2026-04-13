@@ -4,7 +4,7 @@ Python plotting scripts for the T1D moving-window ODE parameter estimation proje
 
 ## Data
 
-- **Source:** Tidepool CGM exports (patient `SM002`)
+- **Source:** Tidepool CGM exports (patients `SM001`, `SM002`)
 - **Location:** `~/odrive/home/melike-rotation/project001/Tidepool_Exports/` (rclone mount)
 - **Input:** `optimization_summary.mat` per time window, output from the upstream MATLAB pipeline
 

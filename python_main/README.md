@@ -10,19 +10,32 @@ Python plotting scripts for the T1D moving-window ODE parameter estimation proje
 
 ## Scripts
 
-### `src/01.py`
-Loads optimization results across all moving-window directories and generates plots saved to `Tidepool_Exports/plots/`:
+### `src/00_run_smoother.py`
+Sets active patient (`PAT.txt`) and runs the upstream MATLAB smoother (`T1D_moving_window_smoother_two_betas.m`).
 
+### `src/01_estimate_basal_glucose.py`
+Estimates basal glucose across all patients as the 40th percentile of BG readings between 02:00–05:00.
+
+### `src/02_plot_mult_window_sizes.py`
+Single-patient plots across multiple moving-window configurations. Outputs to `outputs/02/<pat>/`:
 - RMSE vs. interval start time (per window set)
-- Gamma vs. interval start time, colored by RMSE (per window set)
-- Gamma estimates across all window sizes and start times (combined)
+- Gamma vs. interval start time (per window set)
 
-Translated from `src/T1D_moving_window_smoother_two_betas_plotting.m`.
+### `src/03_single_patient_params.py`
+Single-patient parameter analysis for a fixed window set (`360mins_by_180mins`). Outputs to `outputs/03/<pat>/`:
+- All params vs. time of day, colored by study day
+- Pairplot of params
+- Param correlation heatmap
+
+### `src/04_multi_patient_params.py`
+Multi-patient parameter analysis. Loads summaries for all patients and outputs to `outputs/04/`:
+- All params vs. time of day (colored by study day, linetype by patient)
+- Boxplots of params by study day with median overlay per patient
 
 ## Related
 
 Upstream pipeline: `melike-lab/data_assimilation_main/projects/T1DM/T1D_moving_window_smoother_two_betas.m`
-
+now sourcing from located in src/*.m. Path updated with in these scripts points to `melike-lab/data_assimilation_main/projects/T1DM`.
 
 ## Dependencies
 

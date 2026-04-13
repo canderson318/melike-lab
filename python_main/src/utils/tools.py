@@ -1,3 +1,5 @@
+from pydoc import ispath
+
 import numpy as np
 import os
 from pathlib import Path
@@ -15,6 +17,17 @@ def mount_odrive(force = False):
             capture_output=True
         )
         print(f"Odrive now mounted at {odrive_path}: ", res)
+
+def sym_link(real_path, sym_path):
+    if not isinstance(sym_path, Path):
+        sym_path = Path(sym_path)
+                                                                                                        
+    if sym_path.exists() or sym_path.is_symlink():                                                       
+        sym_path.unlink() if sym_path.is_symlink() else sym_path.rmdir()                                 
+                                                                                                        
+    return os.symlink(real_path, sym_path)   
+    
+    
 
 def mins_to_timestr(minutes):
     """Convert minutes-since-midnight array to HH:MM strings for tick labels."""
@@ -40,8 +53,15 @@ def setPatient(pat):
     return pat
     
 def runPatient(command: str,pat: Optional[str]=None):
-    """Run window smoother on patient"""
+    """Run matlab script on patient"""
     if pat is not None:
         setPatient(pat)
-    sp.run(['zsh', '-i', '-c', command],executable='/bin/zsh')
+    print(open("PAT.txt", 'rt').read())
     
+    frags = command.split(" ")
+    path = [x  for x in frags if "/" in x or x.endswith((".m",".py"))][0]
+    if not Path(path).exists():
+        return FileNotFoundError("Error: File not found in `command`")
+    
+    return sp.run(['zsh', '-i', '-c', command],executable='/bin/zsh')
+    # return sp.run(['zsh', '-c', command],executable='/bin/zsh')

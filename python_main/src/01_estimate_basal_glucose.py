@@ -1,3 +1,6 @@
+##
+#+ Estimate Basal glucose by taking the 40th percentile of BG across all participants.
+##
 import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
@@ -14,7 +17,6 @@ import scipy as sp
 # ── Setup ─────────────────────────────────────────────────────────────────────
 #\\\\
     
-
 os.chdir("/Users/canderson/Documents/school/local-melike-lab/melike-lab/python_main")    
 
 data_dir = Path("/Users/canderson/odrive/home/melike-rotation/project001/Tidepool_Exports/data")
@@ -38,7 +40,7 @@ data["HROD"] = base.dt.hour
 sub = data[(data.HROD<5) & (data.HROD > 2)]
 
 
-print(f"** 05:00 to 2:00\nMedian = {sub.bg.median():.3f}, STDEV = {sub.bg.std():.3f}, N = {sub.patient_id.nunique()}")
+print(f"** 05:00 to 02:00\nMedian = {sub.bg.median():.3f}, STDEV = {sub.bg.std():.3f}, N = {sub.patient_id.nunique()}")
 
 percs = []
 

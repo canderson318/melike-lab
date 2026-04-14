@@ -90,6 +90,7 @@ def transform(x):
     return np.log1p(x.copy())
 SUB[new_cols] = SUB[cols_to_transform].apply(transform)
 
+raise ValueError("Chekc why a == a_log1p")
 #\\\\
 #\\\\
 # ––– Plot param x hour boxplots styled by pat
@@ -160,6 +161,15 @@ del LINE
 
 #\\\\
 #\\\\
-# ––– 
+# ––– Correlation heatmap 
 #\\\\
 #\\\\
+
+corr_m = SUB.loc[:,cols].corr()
+corr = pd.DataFrame(corr_m, columns = cols.values, index = cols.values)
+
+fig,ax = plt.subplots(figsize = (10,10))
+sns.heatmap(corr, ax = ax, cmap = 'RdBu_r',)
+plt.suptitle(f"Parameter Correlations")
+plt.tight_layout()
+plt.savefig(out_dir/'param_corr_heamap.pdf')

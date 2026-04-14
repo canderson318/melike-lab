@@ -49,31 +49,32 @@ class GlucoseSim:
         Gj: glucose load of meal (mg/dl), tj_m: meal time,
         t_k/t_k1: current and next event times.
         """
+        # # grid of time to integrate a,b over to get c
+        # #++ upper bound of integral at t+10/a not inf, 10/a close enough to 0
+        # t_grid = np.linspace(tj_m, tj_m + 10/a, 10000)
+        # c = GlucoseSim.calculate_c(a, b, t_grid, tj_m)
+        c = (a*b)/(b-a) 
+        
         # dt
         hk = t_k1 - t_k
         term1 = (np.exp(-a*(t_k1 - tj_m)) - np.exp(-gamma*hk) * np.exp(-a*(t_k - tj_m))) / (gamma - a)
         term2 = (np.exp(-b*(t_k1 - tj_m)) - np.exp(-gamma*hk) * np.exp(-b*(t_k - tj_m))) / (gamma - b)
-        # grid of time to integrate a,b over to get c
-        #++ upper bound of integral at t+10/a not inf, 10/a close enough to 0
-        t_grid = np.linspace(tj_m, tj_m + 10/a, 10000)
-        c = GlucoseSim.calculate_c(a, b, t_grid, tj_m)
         return (Gj / c) * (term1 - term2)
     
     @staticmethod
-    def bolusInsulin(Gj, c, d, tj_m, gamma, t_k, t_k1):
+    def bolusInsulin(Gj, d, tj_m, gamma, t_k, t_k1):
         """
-        Meal contribution for a single meal (eq. 9).
-        Gj: glucose load of meal (mg/dl), tj_m: meal time,
-        t_k/t_k1: current and next event times.
         """
+        # # grid of time to integrate a,b over to get c
+        # # ++ upper bound of integral at t+10/a not inf, 10/a close enough to 0
+        # t_grid = np.linspace(tj_m, tj_m + 10/a, 10000)
+        # c = GlucoseSim.calculate_c(a, b, t_grid, tj_m)
+        c = 1/((np.exp(-d*(z-x))-1)/d - (np.exp(-c*(z-x))-1)/c);
+        
         # dt
         hk = t_k1 - t_k
         term1 = (np.exp(-a*(t_k1 - tj_m)) - np.exp(-gamma*hk) * np.exp(-a*(t_k - tj_m))) / (gamma - a)
         term2 = (np.exp(-b*(t_k1 - tj_m)) - np.exp(-gamma*hk) * np.exp(-b*(t_k - tj_m))) / (gamma - b)
-        # grid of time to integrate a,b over to get c
-        #++ upper bound of integral at t+10/a not inf, 10/a close enough to 0
-        t_grid = np.linspace(tj_m, tj_m + 10/a, 10000)
-        c = GlucoseSim.calculate_c(a, b, t_grid, tj_m)
         return (Gj / c) * (term1 - term2)
     
     @staticmethod

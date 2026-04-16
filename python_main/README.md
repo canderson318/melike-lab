@@ -32,7 +32,7 @@ Multi-patient parameter analysis. Loads summaries for all patients and outputs t
 - All params vs. time of day (colored by study day, linetype by patient)
 - Boxplots of params by study day with median overlay per patient
 
-## Utils (`src/utils/tools.py`)
+## Utils (`src/lib/tools.py`)
 
 | Function | Description |
 |---|---|

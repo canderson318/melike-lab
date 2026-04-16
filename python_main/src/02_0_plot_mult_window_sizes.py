@@ -9,7 +9,7 @@ import pandas as pd
 import os
 from pathlib import Path
 import subprocess as sp
-from src.utils.tools import *
+from src.lib.tools import *
 
 #\\\\
 # ── Setup ─────────────────────────────────────────────────────────────────────
@@ -42,7 +42,7 @@ for pat in os.listdir(local_output_path/"param_summary"):
 
     # aggregate summaries
     if False:
-        runPatient(command = 'srcmatlab src/T1D_moving_window_smoother_two_betas_param_summary.m')
+        runPatient(command = 'srcmatlab src/lib/T1D_moving_window_smoother_two_betas_param_summary.m')
 
 
     #\\\\

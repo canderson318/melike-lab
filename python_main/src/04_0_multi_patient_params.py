@@ -6,7 +6,7 @@ import pandas as pd
 import os
 from pathlib import Path
 import subprocess as sp
-from src.utils.tools import *
+from src.lib.tools import *
 import re
 
 #\\\\
@@ -23,7 +23,7 @@ mount_odrive()
 # aggregate summaries
 if False:
     for pat in ["SM001", "SM002"]:
-        runPatient(command = 'srcmatlab src/T1D_moving_window_smoother_two_betas_param_summary.m', pat = pat)
+        runPatient(command = 'srcmatlab src/lib/T1D_moving_window_smoother_two_betas_param_summary.m', pat = pat)
 
 # link outputs it to this directory
 output_real_path = '/Users/canderson/odrive/home/melike-rotation/project001/outputs/'

@@ -40,10 +40,6 @@ for pat in os.listdir(local_output_path/"param_summary"):
     out_dir = local_output_path/ "02" / pat
     out_dir.mkdir(exist_ok = True,parents = True)
 
-    # aggregate summaries
-    if False:
-        runPatient(command = 'srcmatlab src/lib/T1D_moving_window_smoother_two_betas_param_summary.m')
-
 
     #\\\\
     # ── Load data ─────────────────────────────────────────────────────────────────

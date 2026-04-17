@@ -20,11 +20,6 @@ os.chdir(WD)
 # Mount OneDrive if not already mounted
 mount_odrive()
 
-# aggregate summaries
-if False:
-    for pat in ["SM001", "SM002"]:
-        runPatient(command = 'srcmatlab src/lib/T1D_moving_window_smoother_two_betas_param_summary.m', pat = pat)
-
 # link outputs it to this directory
 output_real_path = '/Users/canderson/odrive/home/melike-rotation/project001/outputs/'
 os.listdir(output_real_path)
@@ -35,7 +30,6 @@ sym_link(output_real_path, local_output_path)
 # set output directories
 out_dir = local_output_path/ "04"
 out_dir.mkdir(exist_ok = True)
-
 
 
 #\\\\
@@ -83,28 +77,21 @@ window_set = "360mins_by_180mins"
 interval_width, interval_stride = [int(x) for x in re.findall(r'\d+',window_set)]
 SUB = summary.loc[summary.label == window_set].copy()
 
-# log some cols
-cols_to_transform = ['a', 'b', 'rmse', "gamma", "Gb"]
-new_cols = [x+"_log1p" for x in cols_to_transform]
-def transform(x):
-    return np.log1p(x.copy())
-SUB[new_cols] = SUB[cols_to_transform].apply(transform)
 
-raise ValueError("Chekc why a == a_log1p")
 #\\\\
 #\\\\
 # ––– Plot param x hour boxplots styled by pat
 #\\\\
 #\\\\
 
-cols = ['Gb', 'gamma', 'sigma', 'a', 'b', 'beta_day', 'beta_night','rmse'] + new_cols
-cols = pd.Index(np.sort(cols))
+vars = pd.Index(np.sort(['Gb', 'gamma', 'sigma', 'a', 'b', 'beta_day', 'beta_night', 'beta','rmse']))
+cols = vars.intersection(SUB.columns)
 
 LINE = SUB.copy()
 for col in cols:
     new_var = col+"_median"
     LINE[new_var] = (
-        LINE.groupby(["pat", "hrod"])[col].transform("median")
+        LINE.groupby(["pat", "hrod"])[col].transform("median",)
     )
 
 LINE = LINE.filter(regex = r"_median|pat|hrod")
@@ -114,8 +101,10 @@ fgsz=(10,30)
 fig, ax = plt.subplots(len(cols),1, figsize=fgsz)
 axes = ax.flatten()
 for i,col in enumerate(cols):
-    sns.boxplot(SUB, x = "hrod", y = col, hue = "pat", ax = axes[i])
-    sns.lineplot(LINE, x = "hrod", y = col+"_median", hue = "pat", ax = axes[i])
+    plt_SUB = SUB[~SUB[col].isna()]
+    plt_LINE = LINE[~LINE[col+"_median"].isna()]
+    sns.boxplot(plt_SUB, x = "hrod", y = col, hue = "pat", ax = axes[i])
+    sns.lineplot(plt_LINE, x = "hrod", y = col+"_median", hue = "pat", ax = axes[i])
     axes[i].set_xlabel("Interval start TOD")
     axes[i].set_ylabel(col.upper())
     axes[i].set_title(f"{col.upper()}")
@@ -147,8 +136,10 @@ LINE = LINE.filter(regex = r"_median|pat|delta_day")
 fig, ax = plt.subplots(len(cols),1, figsize = fgsz)
 axes = ax.flatten()
 for i,col in enumerate(cols):
-    sns.boxplot(SUB, x = "delta_day", y = col, hue = "pat", ax = axes[i])
-    sns.lineplot(LINE, x = "delta_day", y = col+"_median", hue = "pat", ax = axes[i])
+    plt_SUB = SUB[~SUB[col].isna()]
+    plt_LINE = LINE[~LINE[col+"_median"].isna()]
+    sns.boxplot(plt_SUB, x = "delta_day", y = col, hue = "pat", ax = axes[i])
+    sns.lineplot(plt_LINE, x = "delta_day", y = col+"_median", hue = "pat", ax = axes[i])
     axes[i].set_xlabel("Day")
     axes[i].set_ylabel(col.upper())
     axes[i].set_title(f"{col.upper()}")
@@ -165,11 +156,11 @@ del LINE
 #\\\\
 #\\\\
 
-corr_m = SUB.loc[:,cols].corr()
+corr_m = SUB.loc[:,cols].corr(method = 'spearman')
 corr = pd.DataFrame(corr_m, columns = cols.values, index = cols.values)
 
 fig,ax = plt.subplots(figsize = (10,10))
-sns.heatmap(corr, ax = ax, cmap = 'RdBu_r',)
-plt.suptitle(f"Parameter Correlations")
+sns.heatmap(corr, ax = ax, cmap = 'RdBu_r', vmin = -1, vmax = 1)
+plt.suptitle(f"Parameter Correlations (spearman)")
 plt.tight_layout()
 plt.savefig(out_dir/'param_corr_heamap.pdf')

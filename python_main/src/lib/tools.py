@@ -1,5 +1,5 @@
 from pydoc import ispath
-
+import pandas as pd
 import numpy as np
 import os
 from pathlib import Path
@@ -57,11 +57,21 @@ def runPatient(command: str,pat: Optional[str]=None):
     if pat is not None:
         setPatient(pat)
     print(open("PAT.txt", 'rt').read())
-    
     frags = command.split(" ")
     path = [x  for x in frags if "/" in x or x.endswith((".m",".py"))][0]
     if not Path(path).exists():
         return FileNotFoundError("Error: File not found in `command`")
-    
     return sp.run(['zsh', '-i', '-c', command],executable='/bin/zsh')
-    # return sp.run(['zsh', '-c', command],executable='/bin/zsh')
+
+def loadPatientData(pat,data_dir = "/Users/canderson/odrive/home/melike-rotation/project001/Tidepool_Exports/data/"):
+    path = Path(data_dir)/ pat
+    files = ["bg.csv", "insulin.csv", "nutrition.csv"]
+    def proc(path):
+        df = pd.read_csv(path)
+        df = df.astype(float)
+        non_time_cols = [c for c in df.columns if c !="time"]
+        mask = (~df.loc[:,non_time_cols].isna()).any(axis = 1) & ~df['time'].isna()
+        df = df.loc[mask, :] # where any obs not missing
+        return df
+    return (proc(path/f) for f in files)
+    

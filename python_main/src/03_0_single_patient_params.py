@@ -19,11 +19,6 @@ import time
 WD = Path("/Users/canderson/Documents/school/local-melike-lab/melike-lab/python_main")
 os.chdir(WD)
 
-# patient to analyze
-# pat = setPatient("SM002")
-pat = open("PAT.txt", 'rt').read()
-print(pat)
-
 # Mount OneDrive if not already mounted
 mount_odrive()
 
@@ -33,12 +28,7 @@ local_output_path = WD/'outputs'
 
 sym_link(output_real_path, local_output_path)
 
-
-# aggregate summaries
-if False:
-    runPatient(command = 'srcmatlab src/lib/T1D_moving_window_smoother_two_betas_param_summary.m')
-
-
+# pat = os.listdir(local_output_path/"param_summary")[0]
 for pat in os.listdir(local_output_path/"param_summary"):
     # set output directory
     out_dir = local_output_path/ "03"/pat
@@ -85,9 +75,11 @@ for pat in os.listdir(local_output_path/"param_summary"):
     interval_width, interval_stride = [int(x) for x in re.findall(r'\d+',window_set)]
     SUB = summary.loc[summary.label == window_set].copy()
 
-    # var vs interval start
-    cols = pd.Index(['Gb', 'gamma', 'sigma', 'a', 'b', 'beta_day', 'beta_night','rmse'])
+    all_vars = pd.Index(['Gb', 'gamma', 'sigma', 'a', 'b', 'beta_d', 'beta_n','beta','rmse'])
 
+    cols = all_vars.intersection(summary.columns)
+    
+    # var vs interval start plot
     fig, ax = plt.subplots(len(cols),1, figsize=(10, 20))
     axes = ax.flatten()
     for i,col in enumerate(cols):

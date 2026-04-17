@@ -9,36 +9,31 @@ import pandas as pd
 import os
 from pathlib import Path
 import subprocess as sp
-from src.lib import tools
+from src.lib.tools import *
 
 #\\\\
 # ── Setup ─────────────────────────────────────────────────────────────────────
 #\\\\
 
-os.chdir("/Users/canderson/Documents/school/local-melike-lab/melike-lab/python_main")    
+WD = Path("/Users/canderson/Documents/school/local-melike-lab/melike-lab/python_main")
+os.chdir(WD)
 
 #\\\
-# ––– Run Smoother on Patient —–––––––––––––––––––––––––––––––––
+# ––– Summarize parameters for all patients —–––––––––––––––––––––––––––––––––
 #\\\
 
-# patients = ["SM022","SM020","SM012"]
-patients = ["SM012"]
+# Mount OneDrive if not already mounted
+mount_odrive()
 
-# command = "srcmatlab src/lib/T1D_moving_window_smoother_two_betas.m"
-cmd = "srcmatlab src/lib/T1D_moving_window_smoother.m"
+# link outputs it to this directory
+real_output_path = '/Users/canderson/odrive/home/melike-rotation/project001/outputs/'
+local_output_path = WD/'outputs'
+patients = ["SM001","SM002","SM012", "SM020", "SM022"]
 
-# check if script exists
-scrpt = cmd.split(" ")[1]
-if not Path(scrpt).exists():
-    raise FileExistsError(f"`{scrpt}` not found")
+# aggregate summaries
+cmd = 'srcmatlab src/lib/T1D_moving_window_smoother_param_summary.m'
 
 for pat in patients:
-    # patient to analyze
-    tools.setPatient(pat) # feeds into matlab scripts
-    double_check = open('PAT.txt', 'rt').read()
-    if pat != double_check:
-        raise ValueError("ERROR: current patient and logged patient do not match!")
-    
-    # source matlab script
-    print(f"\n\n****** Running Smoother on {double_check} ****** ")
-    tools.runPatient(command = cmd)
+    print(f"\n\n****** Compiling Param Summary for {pat} ****** ")
+    runPatient(command = cmd, pat = pat)
+        

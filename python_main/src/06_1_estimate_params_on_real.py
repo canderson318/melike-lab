@@ -32,11 +32,51 @@ local_output_path = WD/'outputs'
 sym_link(output_real_path, local_output_path)
 
 # set output directories
-out_dir = local_output_path/ "06"
+out_dir = local_output_path/ "06_1"
 out_dir.mkdir(exist_ok = True)
 
-# load simulation
-sim = pkl.load(open(local_output_path/"05"/"sim.pkl", 'rb'))
+# load data
+pat = "SM002"
+bg, ins, nut = loadPatientData(pat)
+
+nut.carbs = nut.carbs * 1000
+
+dat = pd.merge_asof(bg,ins,on = 'time', direction = 'nearest', tolerance = 15)
+dat = pd.merge_asof(dat,nut,on = 'time', direction = 'nearest', tolerance = 15)
+dat['time_hr'] = dat['time'] / 60
+dat['time_day'] = dat['time_hr'] / 24
+
+
+fig, ax = plt.subplots(3,1,figsize = (15,10))
+sns.lineplot(dat, x="time_day", y="bg", ax=ax[0])
+ax[0].set_ylabel("Glucose", color="steelblue")
+ax[0].tick_params(axis='y', labelcolor="steelblue")
+ax[0].set_xlim((0,dat.time_day.max()))
+ax[0].set_xlabel("")
+
+ax[1].bar(dat['time_day'], dat['carbs'], color='orange', width=0.01, label='Carbs',alpha = .3)
+ax[1].set_ylabel('Carbs', color="orange")
+ax[1].tick_params(axis='y', labelcolor='orange')
+ax[1].set_xlim((0,dat.time_day.max()))
+ax[1].set_xlabel("")
+
+ax[2].plot(dat['time_day'], dat['Basal'], color='green', label='Basal', alpha = .3)
+ax[2].set_ylabel('Basal Insulin', color="green")
+ax[2].tick_params(axis='y', labelcolor='green')
+
+ax[2].scatter(dat['time_day'], dat['Bolus'], color='green', label='Bolus', alpha = 1,  s= 50)
+ax[2].set_ylabel("Bolus Insulin", color = "green")
+ax[2].tick_params(axis = "y", labelcolor = "green")
+
+ax[2].set_xlabel("")
+ax[2].set_xlim((0,dat.time_day.max()))
+ax[2].legend()
+
+[ax[i].xaxis.set_major_locator(plt.MultipleLocator(.5)) for i in range(3)]
+plt.suptitle(f"{pat} Glucose evolution", y=1, fontsize=14)
+plt.tight_layout()
+plt.xlabel("Day")
+plt.savefig(out_dir/f"{pat}_glucose_evolution.png")
 
 # \\\\
 # \\\\
@@ -77,18 +117,13 @@ def neg_log_likelihood(params, t, G_obs, Gmeal, Ibolus):
 
     return -ll
 
-# extract simulated patient
-t, G_obs, Gmeal, Ibolus = sim.t, sim.results.mean(axis = 1), sim.Gmeal, sim.Ibolus
+# t, G_obs, Gmeal, Ibolus = sim.t, sim.results.mean(axis = 1), sim.Gmeal, sim.Ibolus
 
-# optimize b as function a
-a_meal_actual, b_meal_actual, a_ins_actual, b_ins_actual = [sim.__dict__[x] for x in ['a_meal', 'b_meal', 'a_ins', 'b_ins']]
+t = dat.time
+G_obs = dat.bg
+Ibolus = dat.Bolus
+Gmeal = dat.carbs
 
-# b_meal = a_meal + np.exp(log_d_meal)
-log_d_meal_actual = np.log(b_meal_actual - a_meal_actual)
-log_d_ins_actual = np.log(b_ins_actual - a_ins_actual)
-np.exp(log_d_meal_actual) + a_meal_actual
-
-# neg_log_likelihood((140,5,.06,a_meal_actual, log_d_meal_actual, a_ins_actual, log_d_ins_actual, 50), t, G_obs, Gmeal, Ibolus)
 
 #\\\\
 #\\\\
@@ -97,26 +132,25 @@ np.exp(log_d_meal_actual) + a_meal_actual
 #\\\\
 
 #                  Gb, sigma, gamma, a_meal, log_d_meal, a_ins, log_d_ins, beta
-# start_points = [140,     5,   .06,     .1,         -1,    .1,        -1,   50],
-start_points   = [200,     10,   .06,    .01,         -1,    .01,        -1,   100]
+start_points   = [100,     10,   .06,    .01,         -1,    .01,        -1,   100]
 
 #                Gb, sigma, gamma, a_meal, log_d_meal, a_ins, log_d_ins, beta
-bounds =  [(80,300),(0.1,50),(1e-4,1),(1e-4,1),   (-100,5), (1e-4,1),   (-100,5), (0,500)]
+bounds =  [(50,250),(0.1,50),(1e-4,1),(1e-4,1),   (-100,5), (1e-4,1),   (-100,5), (0,500)]
 
-# result = minimize(
-#     neg_log_likelihood,
-#     x0=start_points,
-#     args=(t, G_obs, Gmeal, Ibolus),
-#     bounds=bounds,
-#     # method='L-BFGS-B',
-#     method='Nelder-Mead',
-#     options = {'factr':1e5,'maxiter':1000,'maxfun':10_000}
-# )
-# pkl.dump(result, open (out_dir / "optim_sim_res.pkl", 'wb'))
+result = minimize(
+    neg_log_likelihood,
+    x0=start_points,
+    args=(t, G_obs, Gmeal, Ibolus),
+    bounds=bounds,
+    # method='L-BFGS-B',
+    method='Nelder-Mead',
+    options = {'maxiter':1000}
+    # options = {'factr':1e5,'maxiter':1000,'maxfun':10_000}
+)
+pkl.dump(result, open (out_dir / "optim_res.pkl", 'wb'))
 result = pkl.load(open(out_dir / "optim_sim_res.pkl", 'rb'))
 
 map_params = result.x
-map_params
 
 
 Gb, sigma, gamma, a_meal, log_d_meal, a_ins, log_d_ins, beta = map_params
@@ -126,11 +160,20 @@ b_ins = a_ins + np.exp(log_d_ins)
 new_sim = GlucoseSim(Gb = Gb, sigma = sigma, gamma = gamma, a_meal = a_meal, b_meal = b_meal,a_ins =  a_ins, b_ins = b_ins, beta = beta,
                      Gmeal = Gmeal, Ibolus = Ibolus , t  = t)
 
+new_sim.run(num_sim = 1)
 
 fig, ax = plt.subplots(figsize = (10,8))
 ax.plot(t, G_obs, color = "orange", label = "Actual")
-new_sim.run(num_sim = 5).plot(ax = ax)
-ax.set_ylabel("Blood Glucose")
+ax.set_xlim((0,1500))
+
+
+fig, ax = plt.subplots(figsize = (15,10))
+sns.lineplot(dat, x = "time", y = "bg", color = 'steelblue', ax = ax, label = "Actual")
+ax.plot(new_sim.t,new_sim.results, label = "Predicted", color = 'orange')
+plt.legend()
+plt.xlabel("Time")
+plt.ylabel("Glucose", color = "steelblue")
+plt.savefig(out_dir/f"estimate.pdf")
 
 #\\\\
 #\\\\

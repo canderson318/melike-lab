@@ -9,7 +9,7 @@ import subprocess as sp
 from src.lib.tools import *
 from src.lib.GlucoseSim import *
 import pickle as pkl
-from scipy.optimize import minimize
+from scipy import optimize
 from scipy.stats import norm
 from numdifftools import Hessian
 from scipy.linalg import inv
@@ -80,15 +80,19 @@ def neg_log_likelihood(params, t, G_obs, Gmeal, Ibolus):
 # extract simulated patient
 t, G_obs, Gmeal, Ibolus = sim.t, sim.results.mean(axis = 1), sim.Gmeal, sim.Ibolus
 
-# optimize b as function a
-a_meal_actual, b_meal_actual, a_ins_actual, b_ins_actual = [sim.__dict__[x] for x in ['a_meal', 'b_meal', 'a_ins', 'b_ins']]
+# subset 
+# N = 100
+# inds = np.sort(np.random.choice(range(len(t)), N, replace = False))
+inds = range(0,100)
+t, G_obs, Gmeal, Ibolus  = t[inds], G_obs[inds], Gmeal[inds], Ibolus[inds] 
 
-# b_meal = a_meal + np.exp(log_d_meal)
-log_d_meal_actual = np.log(b_meal_actual - a_meal_actual)
-log_d_ins_actual = np.log(b_ins_actual - a_ins_actual)
-np.exp(log_d_meal_actual) + a_meal_actual
 
-# neg_log_likelihood((140,5,.06,a_meal_actual, log_d_meal_actual, a_ins_actual, log_d_ins_actual, 50), t, G_obs, Gmeal, Ibolus)
+# # optimize b as function a
+# a_meal_actual, b_meal_actual, a_ins_actual, b_ins_actual = [sim.__dict__[x] for x in ['a_meal', 'b_meal', 'a_ins', 'b_ins']]
+# # b_meal = a_meal + np.exp(log_d_meal)
+# log_d_meal_actual = np.log(b_meal_actual - a_meal_actual)
+# log_d_ins_actual = np.log(b_ins_actual - a_ins_actual)
+# np.exp(log_d_meal_actual) + a_meal_actual
 
 #\\\\
 #\\\\
@@ -96,24 +100,31 @@ np.exp(log_d_meal_actual) + a_meal_actual
 #\\\\
 #\\\\
 
+plt.plot(t, G_obs)
+
 #                  Gb, sigma, gamma, a_meal, log_d_meal, a_ins, log_d_ins, beta
 # start_points = [140,     5,   .06,     .1,         -1,    .1,        -1,   50],
-start_points   = [200,     10,   .06,    .01,         -1,    .01,        -1,   100]
+start_points   = [150,     10,   .07,    .04,         -4,    .01,        -2,   100]
 
 #                Gb, sigma, gamma, a_meal, log_d_meal, a_ins, log_d_ins, beta
-bounds =  [(80,300),(0.1,50),(1e-4,1),(1e-4,1),   (-100,5), (1e-4,1),   (-100,5), (0,500)]
+bounds =  [(100,200),(5,15),(.06,.08),(.01,.07),(-100,5), (.001,.02),   (-100,5), (50,200)]
 
-# result = minimize(
-#     neg_log_likelihood,
-#     x0=start_points,
+result = optimize.minimize(
+    neg_log_likelihood,
+    x0=start_points,
+    args=(t, G_obs, Gmeal, Ibolus),
+    bounds=bounds,
+    method='Nelder-Mead', options = {'maxiter':2_000, "adaptive": False}
+)
+
+# result = optimize.differential_evolution(
+#     neg_log_likelihood, 
+#      x0=start_points,
 #     args=(t, G_obs, Gmeal, Ibolus),
-#     bounds=bounds,
-#     # method='L-BFGS-B',
-#     method='Nelder-Mead',
-#     options = {'factr':1e5,'maxiter':1000,'maxfun':10_000}
+#     bounds=bounds, 
+#     workers = 1,
+#     maxiter=10,
 # )
-# pkl.dump(result, open (out_dir / "optim_sim_res.pkl", 'wb'))
-result = pkl.load(open(out_dir / "optim_sim_res.pkl", 'rb'))
 
 map_params = result.x
 map_params
@@ -123,40 +134,48 @@ Gb, sigma, gamma, a_meal, log_d_meal, a_ins, log_d_ins, beta = map_params
 b_meal = a_meal + np.exp(log_d_meal)
 b_ins = a_ins + np.exp(log_d_ins)
 
-new_sim = GlucoseSim(Gb = Gb, sigma = sigma, gamma = gamma, a_meal = a_meal, b_meal = b_meal,a_ins =  a_ins, b_ins = b_ins, beta = beta,
+new_sim = GlucoseSim(Gb = Gb, sigma = sigma, gamma = gamma, 
+                     a_meal = a_meal, b_meal = b_meal,
+                     a_ins =  a_ins, b_ins = b_ins, beta = beta,
                      Gmeal = Gmeal, Ibolus = Ibolus , t  = t)
-
+new_sim.run(num_sim = 5)
 
 fig, ax = plt.subplots(figsize = (10,8))
 ax.plot(t, G_obs, color = "orange", label = "Actual")
-new_sim.run(num_sim = 5).plot(ax = ax)
+new_sim.plot(ax = ax)
 ax.set_ylabel("Blood Glucose")
 
-#\\\\
-#\\\\
-#–––– Estimate confidence around MAP
-#\\\\
-#\\\\
 
-# Hessian at MAP:
-#++ each parameter's second derivative w.r.t. every other parameter
-#+++ small along diagonal: low curvature, more bowl like, less identifiable
-#+++ large along diagonal: high curvature, ll sensitive to parameter, well identified
-#+++ large off diag: parameters are correlated in ll space, changing one, the other will compensate
-#+++ small off diag: parameters are uncorrelated in ll
+# RMSE
+np.sqrt(((sim.results[inds,:].mean(axis = 1) - new_sim.results.mean(axis = 1))**2).mean())
+# 3.0784249149024587
 
-# H = Hessian(lambda p: neg_log_likelihood(p, t, G_obs, Gmeal, Ibolus),
-#             method = "central", order = 2, step = 1e-3)(
-#                 map_params
-#                 )
-# H = pd.DataFrame(H, index = ["Gb", "sigma", "gamma", "a_meal", "log_d_meal", "a_ins", "log_d_ins", "beta"], columns = ["Gb", "sigma", "gamma", "a_meal", "log_d_meal", "a_ins", "log_d_ins", "beta"])
-# pkl.dump(H, open (out_dir / "hessian.pkl", 'wb'))
-H = pkl.load(open (out_dir / "hessian.pkl", 'rb'))
+# MAD
+resid  = sim.results[inds,:].mean(axis = 1) - new_sim.results.mean(axis = 1)
+np.abs(resid).mean()
 
-# posterior covariance and std errors
-cov = inv(H)
-std_errors = np.sqrt(np.diag(cov))
-err  = pd.DataFrame({"SE": std_errors, "MAP":map_params}, index = ["Gb", "sigma", "gamma", "a_meal", "log_d_meal", "a_ins", "log_d_ins", "beta"])
-err
+plt.plot(range(len(resid)),resid)
+plt.axhline(0, color = "black")
+
+x = sim.results[inds,:].mean(axis = 1)
+y = new_sim.results.mean(axis = 1)
+
+MM = np.column_stack([np.ones(len(x)), x])
+
+intrcpt,slope = np.linalg.inv(MM.T@MM)@MM.T@y
+y_hat = intrcpt + slope * x
 
 
+# from sklearn.linear_model import LinearRegression
+# LR = LinearRegression()
+# LR.fit(x.reshape((-1,1)),y.reshape((-1,1)))
+# intrcpt,slope = LR.intercept_,LR.coef_
+# y_hat = intrcpt + slope * x
+
+
+fig, ax = plt.subplots(figsize = (10,10))
+ax.axline(xy1 = (140,140),slope =1, color = "black", linestyle = '--', alpha = .5)
+ax.scatter(x,y)
+ax.plot(x,y_hat.ravel())
+ax.set_xlabel("Actual")
+ax.set_ylabel("Predicted")

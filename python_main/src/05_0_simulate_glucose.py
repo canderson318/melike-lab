@@ -57,14 +57,14 @@ Ib = np.maximum(I / blood_vol, .01)
 
 # set params
 Gb = 140
-sigma = 5
-gamma = .06
+sigma = 10
+gamma = .08
 # a     = .5 + gamma # peaks quickly
 # b     = .3 + gamma # drops towards baseline quickly
-a_meal = .1
-b_meal = .15
-a_ins = .1
-b_ins = .15
+a_meal = .05
+b_meal = .07
+a_ins = .01
+b_ins = .1
 beta = 50
 
 # run simulation
@@ -102,3 +102,4 @@ plt.savefig(out_dir/f"simple_sim_{param_path}.pdf")
 
 with  open(out_dir/"sim.pkl", 'wb') as f:
     pkl.dump(sim,f)
+    

@@ -22,15 +22,10 @@ os.chdir("/Users/canderson/Documents/school/local-melike-lab/melike-lab/python_m
 #\\\
 
 # patients = ["SM022","SM020","SM012"]
-patients = ["SM012"]
+patients = ["SM001"]
 
 # command = "srcmatlab src/lib/T1D_moving_window_smoother_two_betas.m"
 cmd = "srcmatlab src/lib/T1D_moving_window_smoother.m"
-
-# check if script exists
-scrpt = cmd.split(" ")[1]
-if not Path(scrpt).exists():
-    raise FileExistsError(f"`{scrpt}` not found")
 
 for pat in patients:
     # patient to analyze
@@ -38,7 +33,6 @@ for pat in patients:
     double_check = open('PAT.txt', 'rt').read()
     if pat != double_check:
         raise ValueError("ERROR: current patient and logged patient do not match!")
-    
     # source matlab script
     print(f"\n\n****** Running Smoother on {double_check} ****** ")
     tools.runPatient(command = cmd)

@@ -46,7 +46,7 @@ f = "optimization_summary.mat";
 summaries =  cell(length(window_sets), 1);
 
 
-% w = 3;
+% w = 8;
 for w=1:length(window_sets)
     window_set = window_sets(w);
     parent_data_dir = fullfile(in_dir,fullfile(window_set,pat));
@@ -119,7 +119,10 @@ for w=1:length(window_sets)
 
 end % end outer loop
 
-summaries_tab = vertcat(summaries{:});
+full_summaries_mask = arrayfun(@(i) ~isempty(summaries{i}), 1:numel(summaries), "UniformOutput", true);
+full_summaries = summaries(full_summaries_mask==1);
+
+summaries_tab = outerjoin(full_summaries{:}, 'MergeKeys', true);
 summaries_tab.pat = repmat(pat, height(summaries_tab), 1);
 summaries_tab.interval_size = summaries_tab.interval_end - summaries_tab.interval_start;
 

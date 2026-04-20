@@ -39,9 +39,6 @@ all_data = all_data(:, 1:10);
 names = ["patient_id","upload_date","sex","age","diagnosis_date","race","ethnicity","wt_kg","ht_cm","start_time",];
 all_data.Properties.VariableNames = names;
 
-
-
-
 %% Modelling Preferences //////////////////////////////////////////////////////////
 setup_style = struct();
 setup_style.data = 't1dm'; % used in createModelSettings
@@ -52,7 +49,6 @@ setup_style.smoother = 'fmincon';
 
 
 %% Model Settings  //////////////////////////////////////////////////////////
-
 
 %  whers ther data
 pat_data_dir = fullfile(master_data_dir,pat);
@@ -105,7 +101,8 @@ smoother_switch = true; %!!!!!!!!!!!! Remember to set !!!!!!!!!!!!
 % interval_strides = [2 4 6 8] * 60;% min * hrs
 
 % [len stride] = ndgrid([6 12] * 60, [3 6] * 60) ; % min * hrs
-[len stride] = ndgrid([6] * 60, [3] * 60) ; % min * hrs
+% [len stride] = ndgrid([6] * 60, [3] * 60) ; % min * hrs
+[len stride] = ndgrid(90, 90) ; % min 
 
 grid = [len(:) stride(:)];
 interval_lengths = grid(:,1);
@@ -125,7 +122,7 @@ end
 fprintf("\t>>> %.0fmin total to model\n", cumm_time)
 
 
-i = 1
+% i = 1
 for i = 1:length(interval_lengths)
     % window params
     % interval_length = 60 * 24; % min * hrs
@@ -136,7 +133,7 @@ for i = 1:length(interval_lengths)
     interval_stride = interval_strides(i);
 
 
-    fprintf('\n**********************\nInterval Length: %.0fhr (%dmin)\tInterval Stride: %.0fhr (%dmin)\n**********************\n', interval_length/60, interval_length, interval_stride/60, interval_stride)
+    fprintf('\n**********************\nInterval Length: %.1fhr (%dmin)\tInterval Stride: %.1fhr (%dmin)\n**********************\n', interval_length/60, interval_length, interval_stride/60, interval_stride)
 
     % my_settings.model.which_time = which_time;
 
@@ -164,23 +161,25 @@ for i = 1:length(interval_lengths)
     % observeable end of interval
     t_1 = orig_data.raw_measurements.time(closestIndex_1);
 
-    % when to stop looping
-    % time_end = orig_data.raw_measurements.time(1) + interval_length + 60*12; % run until hit this time: first time + windowsize + 6hours -> if stride is 1hr this will run on 6 windows
-    time_end = orig_data.raw_measurements.time(end); % run for all data
-
-
+    
+    
     % numbner of iterations 
     foo = @(tmax,interval,stride) 1  + (( tmax - interval ) / stride);
     % foo(time_end, interval_length, interval_stride)
-
+    
     %% Loop over windows
+    
+    % when to stop looping
+    % time_end = orig_data.raw_measurements.time(1) + interval_length + 60*12; % run until hit this time: first time + windowsize + 6hours -> if stride is 1hr this will run on 6 windows
+    % time_end = orig_data.raw_measurements.time(end); % run for all data
+    time_end = 12*60 + interval_length
+
     counter = 1;
     data = orig_data;
 
-    % data.raw_measurements.time(1) + 1440 + 360 %data.raw_measurements.time(end)
     while t_1 <= time_end
         
-        fprintf('\n\t**********************\n\t\t(%.0f) Window: %.0fhr (%dmin) - %.0fhr (%dmin)\n\t**********************\n',i,t_0/60, t_0, t_1/60, t_1)
+        fprintf('\n\t**********************\n\t\t(%.0f) Window: %.1fhr (%dmin) - %.1fhr (%dmin)\n\t**********************\n',i,t_0/60, t_0, t_1/60, t_1)
 
         run_output_dir = fullfile(master_output_dir,pat,sprintf('smooth_%s_%s',int2str(t_0),int2str(t_1)));
 

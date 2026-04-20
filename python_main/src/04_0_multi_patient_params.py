@@ -8,6 +8,7 @@ from pathlib import Path
 import subprocess as sp
 from src.lib.tools import *
 import re
+from scipy.io import matlab
 
 #\\\\
 # ── Setup ─────────────────────────────────────────────────────────────────────
@@ -46,7 +47,8 @@ summary = pd.concat([pd.read_csv(local_output_path/"param_summary"/pat/"summary.
 summary['label'] = [re.sub(r".*moving_window_of_|_9_am_p.*", "", x) for x in summary.window_name]
 
 # get starttimes
-patient_info = pd.read_csv(Path("/Users/canderson/odrive/home/melike-rotation/project001") / "Tidepool_Exports/Tandem_Tidepool_Deidentified.csv")
+project_dir = Path("/Users/canderson/odrive/home/melike-rotation/project001")
+patient_info = pd.read_csv(project_dir / "Tidepool_Exports/Tandem_Tidepool_Deidentified.csv")
 
 # fix timing
 start_dt_time = {pat: pd.Timestamp(patient_info.start_time[patient_info.patient_id == pat].iloc[0]) for pat in pats}
@@ -65,18 +67,33 @@ summary['delta_day'] = (
     .transform(lambda x: (x.dt.normalize() - x.dt.normalize().min()).dt.days )
 )
 
+
 summary['tod'] = summary['datetime'].dt.time
 summary['hrod'] = summary.datetime.dt.hour
+div = 8
+summary['rnd_hrod'] = (summary.hrod / div).round(1) * div
 summary['minod'] = summary.datetime.dt.minute + summary.datetime.dt.hour*60
 
 # reorder
 summary.sort_values(by = ["pat","window_name", "datetime"],inplace = True)
 
 # subset for specific window    
-window_set = "360mins_by_180mins"
+window_nm = "moving_window_of_360mins_by_180mins_9_am_pm"
+window_set = summary.label[summary.window_name == window_nm].iloc[0]
 interval_width, interval_stride = [int(x) for x in re.findall(r'\d+',window_set)]
 SUB = summary.loc[summary.label == window_set].copy()
 
+eps = SUB.gamma[SUB.gamma != 0].min()
+SUB['log_gamma'] = np.log(SUB.gamma + eps)
+
+# load settings
+smoother_dir = project_dir/f"Tidepool_Exports/{window_nm}/{summary.pat.values[0]}"
+first_window = os.listdir(smoother_dir)[0]
+ml_obj = matlab.loadmat(smoother_dir/first_window/"my_settings.mat")
+settings = ml_obj['my_settings']
+par_names = np.array([str(x[0]) for x in settings['smoother'].item()["theta_est_names"][0][0][0]])
+lwr, uppr  = settings["smoother"].item()['lower_bounds'][0][0].ravel() , settings["smoother"].item()['upper_bounds'][0][0].ravel()
+par_bounds = {str(x):(lwr[i],uppr[i]) for i,x in enumerate(par_names)}
 
 #\\\\
 #\\\\
@@ -84,17 +101,16 @@ SUB = summary.loc[summary.label == window_set].copy()
 #\\\\
 #\\\\
 
-vars = pd.Index(np.sort(['Gb', 'gamma', 'sigma', 'a', 'b', 'beta_day', 'beta_night', 'beta','rmse']))
-cols = vars.intersection(SUB.columns)
+cols = list(par_bounds.keys()) + ['rmse','log_gamma']
 
 LINE = SUB.copy()
 for col in cols:
     new_var = col+"_median"
     LINE[new_var] = (
-        LINE.groupby(["pat", "hrod"])[col].transform("median",)
+        LINE.groupby(["pat", "rnd_hrod"])[col].transform("median",)
     )
 
-LINE = LINE.filter(regex = r"_median|pat|hrod")
+LINE = LINE.filter(regex = r"_median|pat|rnd_hrod")
 
 fgsz=(10,30)
 
@@ -103,8 +119,17 @@ axes = ax.flatten()
 for i,col in enumerate(cols):
     plt_SUB = SUB[~SUB[col].isna()]
     plt_LINE = LINE[~LINE[col+"_median"].isna()]
-    sns.boxplot(plt_SUB, x = "hrod", y = col, hue = "pat", ax = axes[i])
-    sns.lineplot(plt_LINE, x = "hrod", y = col+"_median", hue = "pat", ax = axes[i])
+    
+    if col in par_bounds.keys():
+        lwr,uppr = par_bounds[col]
+        rng = uppr-lwr
+        axes[i].axhspan(lwr, uppr, color="grey", alpha=0.1)
+        axes[i].axhline(y = lwr, color="grey", alpha=0.5, linestyle = "--")
+        axes[i].axhline(y = uppr, color="grey", alpha=0.5, linestyle = "--")
+        axes[i].set_ylim((lwr - .1*rng, uppr +.1*rng))
+    
+    sns.boxplot(plt_SUB, x = "rnd_hrod", y = col, hue = "pat", ax = axes[i])
+    sns.lineplot(plt_LINE, x = "rnd_hrod", y = col+"_median", hue = "pat", ax = axes[i])
     axes[i].set_xlabel("Interval start TOD")
     axes[i].set_ylabel(col.upper())
     axes[i].set_title(f"{col.upper()}")
@@ -138,6 +163,15 @@ axes = ax.flatten()
 for i,col in enumerate(cols):
     plt_SUB = SUB[~SUB[col].isna()]
     plt_LINE = LINE[~LINE[col+"_median"].isna()]
+
+    if col in par_bounds.keys():
+        lwr,uppr = par_bounds[col]
+        rng = uppr-lwr
+        axes[i].axhspan(lwr, uppr, color="grey", alpha=0.1)
+        axes[i].axhline(y = lwr, color="grey", alpha=0.5, linestyle = "--")
+        axes[i].axhline(y = uppr, color="grey", alpha=0.5, linestyle = "--")
+        axes[i].set_ylim((lwr - .1*rng, uppr +.1*rng))
+
     sns.boxplot(plt_SUB, x = "delta_day", y = col, hue = "pat", ax = axes[i])
     sns.lineplot(plt_LINE, x = "delta_day", y = col+"_median", hue = "pat", ax = axes[i])
     axes[i].set_xlabel("Day")
@@ -164,3 +198,4 @@ sns.heatmap(corr, ax = ax, cmap = 'RdBu_r', vmin = -1, vmax = 1)
 plt.suptitle(f"Parameter Correlations (spearman)")
 plt.tight_layout()
 plt.savefig(out_dir/'param_corr_heamap.pdf')
+

@@ -28,7 +28,8 @@ mount_odrive()
 # link outputs it to this directory
 real_output_path = '/Users/canderson/odrive/home/melike-rotation/project001/outputs/'
 local_output_path = WD/'outputs'
-patients = ["SM001","SM002","SM012", "SM020", "SM022"]
+# patients = ["SM001","SM002","SM012", "SM020", "SM022"]
+patients = ["SM001"]
 
 # aggregate summaries
 cmd = 'srcmatlab src/lib/T1D_moving_window_smoother_param_summary.m'

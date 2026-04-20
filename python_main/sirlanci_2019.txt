@@ -1,0 +1,2638 @@
+A Simple Modeling Framework For Prediction In The Human
+Glucose-Insulin System
+Melike Sirlanci5¤* , Matthew E. Levine5 , Cecilia Low Wang6 David J. Albers1,2,3,4 , Andrew M. Stuart5 ,
+
+arXiv:1910.14193v3 [q-bio.QM] 21 Sep 2022
+
+1 Department of Biomedical Informatics, School of Medicine, University of Colorado Anschutz
+Medical Campus, Aurora, CO, USA
+2 Department of Bioengineering, College of Engineering, Design, and Computing, Aurora, CO, USA
+3 Department of Biostatistics & Informatics, Colorado School of Public Health, Aurora, CO, USA
+4 Department of Biomedical Informatics, Columbia University, New York, NY, USA
+5 Department of Computing and Mathematical Sciences, California Institute of Technology, Pasadena,
+CA, USA
+6 Division of Endocrinology, Metabolism and Diabetes, Department of Medicine, School of Medicine,
+University of Colorado Anschutz Medical Campus, Aurora, CO, USA
+¤Current Address: Department of Biomedical Informatics, School of Medicine, University of Colorado
+Anschutz Medical Campus, Aurora, CO, USA
+*melike.sirlanci@cuanschutz.edu
+Abstract
+In this paper, we build a new, simple, and interpretable mathematical model to estimate and
+forecast physiology related to the human glucose-insulin system, constrained by available data. By
+constructing a simple yet flexible model class with interpretable parameters, this general model can
+be specialized to work in different settings, such as type 2 diabetes mellitus (T2DM) and intensive
+care unit (ICU); different choices of appropriate model functions describing uptake of nutrition and
+removal of glucose differentiate between the models. In addition to data-driven decision-making,
+the model has the potential also to be useful for the basic quantification of endocrine physiology.
+In both cases, the available data is sparse and collected in clinical settings, major factors that have
+constrained our model choice to the simple form adopted.
+The model has the form of a linear stochastic differential equation (SDE) to describe the
+evolution of the BG level. The model includes a term quantifying glucose removal from the
+bloodstream through the regulation system of the human body and two other terms representing
+the effect of nutrition and externally delivered insulin. The stochastic fluctuations encapsulate
+model error necessitated by the simple model form and enable flexible incorporation of data.
+The parameters entering the equation must be learned in a patient-specific fashion, leading to
+personalized models. We present experimental results on patient-specific parameter estimation
+and future BG level forecasting in T2DM and ICU settings. The resulting model leads to the
+prediction of the BG level as an expected value accompanied by a band around this value which
+accounts for uncertainties in the prediction. Such predictions, then, have the potential for use as
+part of control systems that are robust to model imperfections and noisy data. Finally, the model’s
+predictive capability is compared with two different models built explicitly for T2DM and ICU
+contexts. Our simple model also shows clear advantages over the more complex models in terms of
+parameter inference and identifiability, as well as controllability, stemming from its linearity.
+
+1
+
+1
+
+Introduction
+
+Broadly speaking mathematical models of human physiology may serve one of two purposes: elucidation
+of the detailed mechanisms which comprise the complex systems underlying observed physiology; or
+prediction of outcomes from the complex system, for the purposes of medical intervention to ameliorate
+undesirable outcomes. In principle, these two objectives interact: a model which explains the detailed
+mechanisms, if physiologically accurate and compatible with observed data, will of course be good for
+prediction. However, human physiological data are often too sparse for use in resolving high-fidelity
+physiological details; moreover, this sparsity can induce severe model unidentifiability that impedes
+inference efficiency and results in suboptimal predictive performance. One approach to mitigate
+unidentifiability issues with high-fidelity models is to constrain inference. However, in this paper, we
+focus on how model reduction and stochastic closure techniques can be applied to physiologic models
+to make them more identifiable from available data. This, of course, comes with a cost of reduced
+fidelity; however, we find that this tradeoff often sides with model simplicity, especially when data are
+low-fidelity (i.e. sparse and noisy) and the underlying system is not fully understood (i.e. available
+“high-fidelity” models have substantial inadequacies). The human glucose-insulin system provides an
+important example of this challenge because in many settings, insulin∗ —a dominant state variable—is
+rarely measured.
+The objective of the work presented here is to distill existing mechanistic models of the human
+endocrine system into an interpretable model of human glucose dynamics that is identifiable from
+real-world clinical data. We do this by approximating the insulin’s glycemic regulation as an OrnsteinUhlenbeck process (a linear stochastic differential equation with exponential mean-reversion), then
+further introducing forcing terms that parameterize exogenous effects of nutrition and medication.
+The resulting model represents the mean blood glucose (BG) behavior and a confidence region
+quantifying the amplitude of the BG oscillations. These confidence regions can also be used to quantify
+the uncertainty in the mean BG behavior. We then evaluate the predictive performance of this
+simple model on clinical datasets in an outpatient type 2 diabetes setting and an inpatient intensive
+care unit setting. We compare its predictive performance with state-of-the-art predictions given by
+a physiologically constrained inference machinery paired with popular mechanistic models of the
+glucose-insulin system (from which our reduced model was inspired).
+The key finding from this work is non-inferior predictive capacity of our simple linear stochastic
+model when compared to higher complexity non-linear models. This indicates that the severity of
+our clinical data constraints prevented us from extracting additional expressivity from the non-linear
+models beyond the simple dynamics encoded by a forced linear SDE. Alternatively, it may be that the
+additional expressivity of the non-linear models is not of the right type, and thus does not offer much
+additional predictive advantage (despite having clear mechanistic validity).
+Researchers have developed various mathematical models ranging from extremely simple to highly
+complex, using ordinary differential equations (ODEs) and machine learning (ML) to predict and
+describe human glucose metabolism. We discuss these efforts organized according to model usage.
+Some mechanistic models are developed to investigate a specific phenomenon of the glucose-insulin
+system such as to understand the different phases of insulin secretion with respect to different glucose
+∗ Here, we refer to internal insulin levels such as plasma insulin or interstitial insulin; not the dosages of medication.
+
+2
+
+stimulation patterns, to estimate insulin sensitivity in the intravenous glucose tolerance test (IVGTT)
+setting, and to elucidate the cause of the ultradian (long-period) oscillations of insulin and glucose,
+[1–7]. Others have developed models by clinically minded motivations to describe β-cell mass, glucose,
+and insulin dynamics and to investigate T2DM pathophysiology, [8–11]. Some researchers developed
+models to describe the underlying system in more detailed way such as the events that occur during
+oral glucose ingestion [12, 13], or relevant organ systems, [14]. A nice review of the models developed
+for clinical and physiological investigation BG homeostasis and T2DM can be found in [15].
+There are also machine learning models developed to understand model phenotypic and health care
+process differences and to predict T2DM development, [16–27].
+Researchers have developed mechanistic models to address challenges including fast evolution of
+the underlying system (parameter variation in time), wide variation in clinical response within and
+between patients, sparse measurements, and concerns about safety issues with the goals of prediction
+and control of BG levels, [28–38]. Others developed stochastic (mechanistic) models with the same
+purpose, [39–45].
+Glucose control based on mechanistic modeling is the focus of the artificial pancreas project in the
+type 1 diabetes mellitus (T1DM) setting and many models are developed for this purpose, [46–52].
+A comprehensive range of BG control algorithms can be found in [53]. Finally, other researchers
+conducted clinical trials to compare the efficacy between different closed-loop artificial pancreas systems
+and sensor-assisted pump therapy for T1DM patients, [54–58].
+ML approaches have been proposed in pure prediction tasks such as predicting next glucose values
+or hypoglycemia. For these purposes, some researchers used classification methods and neural network
+models, [59–65], while others used ARIMA (auto-regressive integrated moving average) and linear
+regression models, [66–73].
+Finally, in [74], the authors developed a hybrid model balancing a physiological and statistical model
+of glucose-insulin dynamics to forecast long-term BG levels of T1DM patients based on real-world
+data, showing the possibility of outperforming the forecasting of BG levels obtained by either pure
+physiological or pure statistical models alone.
+Patient-centered disease self-management is a crucial tool to improve health condition of patients
+focusing on their needs, life style, and preferences. Some researchers investigated techniques for effective
+self glycemic management and developed computational model-based decision support tools for T2DM
+patients, [75–84].
+In all of the models discussed above, parameter estimation plays a vital role in the accuracy of
+predictions. Parameters are rarely directly measurable, and their values will vary from one patient
+to another. There are two overarching approaches to estimating parameters, optimization where a
+model-data mismatch is minimized to determine parameters [85], and the Bayesian approach [86]
+where the distribution of the parameters, given the data and given the assumed (noisy) model-data
+framework, is computed. Researchers used various approaches for parameter estimation. The most
+common approaches are the standard least squares optimization, [29, 87], nonlinear least squares
+optimization, [88], and Bayesian approach to estimate both time-invariant and time-varying model
+parameters, [89].
+Our contribution in this paper is summarized below.
+
+3
+
+• We describe a simple, interpretable, modeling framework limited to states and parameters that
+are directly observable or inferable from data for prediction within the human glucose-insulin
+system, based on a continuous time linear, Gaussian, stochastic differential equation (SDE) for
+glucose dynamics, in which the effect of insulin appears parametrically.
+• We completely describe the inference machinery necessary—in a data assimilation and inverse
+problems framework—to estimate a SDE model of glucose dynamics with real-world data.
+• The framework is sufficiently general to be usable within the ICU, T2DM, and potentially T1DM
+settings.
+• The solution of the model can be obtained analytically, which means that it does not require
+numerical solver and the prediction could quickly be obtained in an online setting. Hence the
+model could easily be used in any platform for prediction based on real-world data.
+• We demonstrate, in a train-test set-up, that the models are able to fit individual patients with
+reasonable accuracy; both ICU and T2DM data are used. The test framework we use is a
+predictive one laying the foundations for future control methodologies.
+• Comparison of the data fitting for T2DM and ICU patients reveals interesting structural differences
+in their glucose regulation.
+• We make a comparison of the predictive power of our stochastic modeling framework with that
+of more sophisticated models developed for both T2DM and the ICU, demonstrating that the
+simple stochastic approach is at least as accurate as these models in both settings.
+In Section 2.2, we introduce the general continuous-time mathematical model that describes the
+human glucose regulatory system. Then, in Section 2.4, we introduce the specific versions of this model
+relevant in T2DM and ICU settings. The two model classes all derive from a single general model,
+and differ according to how nutrition uptake and glucose removal are represented. In Section 2.5, we
+construct the framework for stating the parameter estimation problem and its solution. In Section
+2.6, we describe the datasets, the experiments we design for parameter estimation and forecasting,
+and the methods we use for parameter estimation and forecasting for the T2DM and ICU settings.
+Section 3 presents the experimental results on parameter estimation and forecasting along with some
+uncertainty quantification (UQ) results separately for T2DM and ICU settings. Finally, in Section 4,
+we make some concluding remarks and discuss future directions that we intend to pursue.
+
+2
+
+Materials and Methods
+
+In this section, we describe the clinical settings of interest, our model construction, the mathematical
+techniques, and the experimental design.
+
+2.1
+
+Clinical Settings of Interest
+
+The model that we develop can be used in T2DM and ICU settings with appropriate adjustments,
+which will be presented in Section 2.2. In this section, we describe the respective clinical settings that
+4
+
+structure our modeling approach.
+2.1.1
+
+Type 2 Diabetes Mellitus (T2DM)
+
+Glucose dynamics in this setting are driven by a combination of diet, activity, medication, and internal
+physiology. Here, we specifically focus on modeling the effect of carbohydrate intake on glycemic
+levels of people with T2DM. The self-monitoring T2DM dataset is from a previous prospective selfmanagement trial. It contains the carbohydrate intake in the meals and 1-2 BG measurements collected
+before and after the meals with the corresponding timing of each event. None of the T2DM patients in
+our dataset took exogenous insulin to control their BG level. This means that the carbohydrate intake
+is the only input to our model.
+The BG levels of T2DM patients show non-stationary behavior over long time-scales reflecting
+gradual changes in the health condition. The observable BG behavior change could occur over timescales on the order of months. Therefore, it is possible to capture system dynamics with a mechanistic
+model over shorter time intervals, i.e., weeks, and use that information to forecast BG levels over the
+following few weeks. This type of predictive tool would be beneficial for T2DM patients in managing
+their disease. Thus, in this setting, we design the predictive framework to provide decision aid to
+T2DM patients in self-management.
+2.1.2
+
+Intensive Care Unit (ICU)
+
+In the ICU setting, glucose dynamics are given by a combination of changing patient physiologic state,
+nutrition (delivered intravenously and enterally through a feeding tube that runs to the gut), and
+insulin delivery. In ICU setting, on average, 8-10% of the ICU patients are diabetic and only 5% of
+those are T1DM patients. However, more than 90% of ICU patients require glycemic management
+and 10-20% of them experience a hypoglycemic event over the course of management. Consequently,
+regardless of being diabetic or non-diabetic, they are typically given IV insulin to control BG levels.
+Patients in the ICU typically have much more volatile physiological dynamics for at least three
+reasons: glycemic dynamics under continuous feeding are oscillatory, the patients are acutely ill and
+their health state changes quickly because of their disease state, and the patients are constantly being
+intervened on to help them heal. Therefore they exhibit BG time series that are often non-stationary
+in complex ways and on different time scales. On slower time scales, patients eventually leave the ICU
+because their health either improves or declines. But there can be fast time scale changes too due to
+interventions and/or sudden health-related events, such as a stroke. These health changes will lead to
+changes in the best-fit parameters of the model; in other words the patient-specific model itself may
+change abruptly, in contrast to the T2DM case.
+The retrospective ICU dataset is extracted from the Columbia University Medical Center Clinical
+Data Warehouse. It contains carbohydrate rate through the enteral feeding tube, IV insulin rate, BG
+measurements, and the timing of all these events. It is important to emphasize that we do not have
+plasma insulin or interstitial insulin rate, as they are collected rarely. The carbohydrate and IV insulin
+rates are the inputs to the model. Considering the highly non-stationary behavior of the system, the
+BG measurements are sparse, at most 15 measurements per day. In this case, we aim this predictive
+framework to be used as a clinical decision support tool in the ICU setting.
+5
+
+2.2
+
+Model construction
+
+To begin construction of a simple, one-state model for glucose dynamics, we first consider the classical
+two-state Bergman [2] equations:
+Ġ = mexternal (t) + fHGP (G) − (c + sI I)G
+I˙ = Iexternal (t) + βfISR (G) − kI.
+
+(1a)
+(1b)
+
+Here, G denotes plasma glucose concentration and I denotes plasma insulin concentration. External
+inputs of nutrition and insulin are given by mexternal (t), Iexternal (t), respectively. The insulin dynamics,
+beyond external forcing, are primarily governed by a glucose-dependent secretion rate fISR (G), insulinproducing beta-cell mass β, and linear degradation rate k. The glucose dynamics, aside from external
+forcing (i.e. meals), are driven by a glucose-dependent (insulin independent) hepatic glucose production
+fHGP , an insulin-dependent glucose removal rate IG (with insulin sensitivity factor sI ), and a linear
+degradation rate c.
+In this work, we hypothesize that the pancreatic and hepatic regulation of glucose can instead be
+approximated by a simple function of glucose finternal (G). We also account for the effect of external
+insulin to the blood glucose level and add a closure term, ν. This results in a new single-state equation
+Ġ = mexternal (t) + finternal (G) + fexternal (I) + ν(t),
+
+(2)
+
+where the closure term ν(t) accounts for additional glycemic dynamics not captured by the first three
+terms. To begin evaluating the utility of this perspective, we choose simple forms for these unknown
+functions.
+Specifically, we assume that glucose regulation can be roughly approximated by an exponential decay
+
+to a fixed point Gb at rate γ such that finternal (G) := −γ G(t) − Gb . We also assume that the effect of
+external insulin delivery has a simple relationship fexternal (I) := βIexternal with proportionality constant
+β. Finally, we assume that the possibly large residual errors induced by these simplifying assumptions
+p
+are given by a Brownian Motion W (t) with variance quantified by σ.; i.e ν(t) := 2γσ 2 Ẇ (t). Note
+√
+that, the term, 2γ is included to actually have σ to represent the variance of the process and γ is
+a relaxation time-scale. Although counter intuitive in this representation, the solution of the event
+time model, given in (4) below, shows the variance of the system dominantly represented by σ. These
+choices yield the following Ornstein-Uhlenbeck model for evolution of blood glucose G(t):
+Ġ(t) = −γ(G(t) − Gb ) + m(t) − βI(t) +
+
+p
+
+2γσ 2 Ẇ (t).
+
+(3)
+
+There are four basic parameters for the model in Section 3. Gb (mg/dl) represents the basal glucose
+(i.e. the mean of the unforced process), γ (1/min) is the decay rate for the exponential mean reversion,
+β (mg/(dl*U)) is a proportionality constant for the linear effect of IV insulin-based glucose removal,
+and σ (mg/dl) governs the variance of the oscillations described by W (t).
+We use simple models for the meal function m(t) and the insulin delivery function I(t) (defined in
+Section 2.4) that enable explicit solution of the continuous time model between events. We define
+events as times at which the meal or insulin delivery functions change discontinuously, or points at
+6
+
+which BG is measured.
+The simple linear Gaussian structure of Ornstein-Uhlenbeck models, along with appropriately simple
+forcing terms m(t), I(t) (defined in Section 2.4), allow for tractable solutions to Section 3. Specifically,
+integration of the system leads to a solution G(t) that is normally distributed with analytically
+calculable mean and variance.
+
+2.3
+
+Advantages of a Linear SDE Model
+
+In accordance with our goal, which is to develop a highly simplified yet interpretable model, we
+work with a forced SDE of Ornstein-Uhlenbeck type to describe glucose evolution, together with an
+observation model of linear form, subject to additive Gaussian noise. The Gaussian structure allows
+for computational tractability in prediction since probability distributions on the glucose state are
+described by Gaussians and hence represented by simply a mean and variance. With this modeling
+choice, we approximate the distribution of glucose levels by Gaussian distribution. However, this is
+a limitation of our modeling approach because the distribution of glucose levels resembles Gamma
+distribution rather than Gaussian distribution. Note that the protocols for managing glucose depend
+on intervals; e.g., a goal may be to keep glucose between 80-150 mg/dl and interval deviation from this
+goal, e.g., 151-180 mg/dl, induce changes in the insulin dosage. This means that decisions are made
+based on boundaries of glycemic trajectories. Nevertheless, because glucose oscillates under continuous
+feeding, clinicians typically aim to ensure that the glycemic mean does not fall below 60 mg/dl or
+above 180 mg/dl for any length of time. The intervals are then a proxy for this balance of managing
+the mean and protecting against trajectories diverging too high or low at any time, including between
+observations, [90]. Hence accurately resolving mean and standard deviation in BG levels is important.
+The Ornstein-Uhlenbeck process has four contributions: a damping term which drives the BG level
+towards its base value at a rate which is possibly insulin dependent; a forcing representing nutritional
+intake, exogenously delivered insulin, and a white noise contribution, which is used to encapsulate
+the high-frequency dynamics as these dynamics are difficult to be resolved with sparse measurements.
+The presence of noise in the glucose evolution model, as well as in the data acquisition process, allows
+for model error which is natural in view of the the rather simple modeling framework. Moreover, the
+existence of the analytic solution of the model makes it possible to perform parameter estimation with
+wide range of filtering and smoothing techniques based on the real-world data.
+
+2.4
+
+Event-Time Model
+
+For computational purposes, and because data are typically available at discrete times, we develop a
+discrete-time version of the model (3). We first present it in generality, then develop it specifically for
+outpatient Type 2 Diabetes (T2DM) glucose modeling (see Section 2.4.1) and for inpatient intensive
+care unit (ICU) glucose modeling (see Section 2.4.2). Note that ICU and T2DM settings are also the
+focus for our data-driven studies.
+(m)
+
+m
+The time discretization is defined completely by a dataset in the following sense. Let {tk }K
+k=1
+
+(i)
+i
+denote the times of relevant nutrition events, let {tk }K
+k=1 denote the times of relevant insulin delivery
+(o) Ko
+events, and let {tk }k=1 denote the times of glucose measurements. We call the re-ordered union of
+
+7
+
+these sets,
+(m)
+
+(i)
+
+(o)
+
+Ko
+Km
+Ki
+{tk }N
+k=0 := {tk }k=1 ∪ {tk }k=1 ∪ {tk }k=1
+
+as event times, where the superscripts, m, i, and o, are used to distinguish the relevant nutrition
+delivery, insulin delivery, and BG measurement times.
+We can obtain the following event-time model by integrating (3) over the event-time intervals,
+[tk , tk+1 ) for k = 0, 1, ..., N − 1, via use of Itô formula, [91]: ∗∗
+G(tk+1 ) = Gb + e−γhk (G(tk ) − Gb ) +
+p
++ σ 1 − e−2γhk ξk ,
+
+Z tk+1
+tk
+
+Z tk+1
+
+e−γ(tk+1 −s) m(s)ds −
+
+e−γ(tk+1 −s) βI(s)ds
+
+tk
+
+(4)
+
+where hk := tk+1 − tk and ξk ∼ N (0, 1) independent random variables. We exhibit specific versions of
+this general event-time model for T2DM and ICU settings in more detail in the following sections.
+2.4.1
+
+T2DM model
+
+Based on the conditions of T2DM setting detailed in subsection 2.1, we set I(t) ≡ 0, i.e., we ignore the
+
+exogenous insulin term in the T2DM event-time model. The meal function, m(t), on the other hand, is
+essential for capturing the uptake of glucose into the bloodstream from consumed carbohydrates. Here,
+we define m(t) as the difference of two exponential functions (this choice was shown to be effective in
+the T2DM case by [92]):
+m(t) =
+
+Km
+X
+Gk
+
+ck
+
+k=1
+(m)
+
+where tk
+
+(m)
+
+(e−a(t−tk
+
+(m)
+
+− e−b(t−tk
+
+)
+
+)
+
+)1[t(m) ,∞) (t)
+
+(5)
+
+k
+
+is the time of the k th meal, Gk (mg/dl) is the total amount of glucose in the k th meal
+
+divided by the approximate volume of blood, and ck is a dimensionless normalizing constant so that
+R ∞ −a(t−t(m) )
+(m)
+1
+k
+(m) (e
+− e−b(t−tk ) )dt = 1. Note that 1[a,b) (·) is the indicator function and defined as
+ck t
+k
+
+1[a,b)] (x) =
+Therefore, the model in (3) becomes
+Ġ(t) = −γ(G(t) − Gb ) +
+
+Km
+X
+Gk
+
+k=1
+
+ck
+
+
+1,
+0,
+(m)
+
+(e−a(t−tk
+
+)
+
+x ∈ [a, b),
+
+otherwise.
+
+(m)
+
+− e−b(t−tk
+
+)
+
+)1[t(m) ,∞) (t) +
+k
+
+p
+2γσ 2 Ẇ (t),
+
+(6)
+
+in the T2DM setting. In this model, the first term represents the body’s own effect to remove insulin
+from the bloodstream, the second term represents the effect of nutrition on the rate of change of BG,
+and the last term models the unmodeled dynamics by the first two terms as white noise. Integrating
+∗∗ equivalent to using integrating factors in this case
+
+8
+
+over [t0 , t], we can write the analytic solution of this equation as
+G(t) = Gb + e−γ(t−t0 ) (G(t0 ) − Gb )
++
++
+
+K
+m
+X
+
+k=1
+Z t
+t0
+
+Gk
+ck
+
+(m)
+
+e−a(t−tk
+
+e−γ(t−s)
+
+(m)
+
+− e−γ(t−tk
+γ−a
+)
+
+(m)
+
+)
+
+−
+
+(m)
+
+− e−γ(t−tk
+γ−b
+
+e−b(t−tk
+
+p
+2γσ 2 dW (s).
+
+)
+
+)
+
+!
+
+1[t(m) ,∞) (t)
+k
+
+(7)
+
+Note that, in practice, we need to evaluate BG level at specific time points and hence need the
+discrete-time model implied by the continuous time representation in (7). Now, by integrating (6) over
+[tk , tk+1 ) and denoting gk := G(tk ), we obtain
+gk+1 = Gb + e−γhk (gk − Gb ) + mk + σ
+
+p
+
+1 − e−2γhk ξk ,
+(m)
+
+as a special case of (4). Also, for any fixed tk , find the meal times tj
+
+(m)
+
+such that tj
+
+the index set of these meal times by Ik . Then mk in (8) becomes
+mk =
+
+X Gj
+
+j∈Ik
+
+(m)
+
+e−a(tk+1 −tj
+
+cj
+
+)
+
+(m)
+
+− e−γhk e−a(tk −tj
+γ−a
+
+(m)
+
+)
+
+−
+
+e−b(tk+1 −tj
+
+(8)
+
+)
+
+≤ tk and denote
+(m)
+
+− e−γhk e−b(tk −tj
+γ−b
+
+)
+
+!
+
+.
+
+(9)
+
+Hence, note that in this case, we have five model parameters to be estimated: Gb , γ, σ, a, b. Recall that
+in this setting, Gb represents the basal glucose value that BG level stays around starting some time
+after nutrition intake until the next nutrition intake. γ represents the decay rate of BG level to Gb
+after the nutrition intake, and σ represents the amplitude of the BG level oscillations. The parameters
+a and b entering the meal function implicitly control the time needed for the glucose nutrition rate to
+reach its peak value, and the time needed for this rate to return back to the vicinity of 0. Because
+of these simple physiological meanings, the parameters entering the event-time model are important
+not only for accurately capturing, and predicting, glucose dynamics based on data, but also contain
+implicit information about the health condition of the patient. For example, the basal glucose value is
+measured during some tests to check if an individual is healthy pre-diabetic, or diabetic.
+2.4.2
+
+ICU model
+
+The specifics of the ICU setting and the available data, as described in Section 2.1, defines the structure
+of our ICU model. In this case, we model both the carbohydrate intake, m(t), and IV insulin delivery,
+I(t).
+We choose to model these external forcings as piecewise constants functions; this choice corresponds
+to clinical practice, in which constant infusions are periodically adjusted, and also allows for simple
+calculations.
+Here, we define the nutritional forcing function as
+m(t) =
+
+Km
+X
+
+dk 1[t(m) ,t(m) ) (t),
+k
+
+k=1
+
+9
+
+k+1
+
+(10)
+
+(m)
+
+where tk
+
+is the time at which a clinician changes the nutrition delivery rate, dk is the nutrition
+(m)
+
+(m)
+
+rate over the time interval [tk , tk+1 ); these features are both directly available in our clinical dataset.
+Similarly, we define the external insulin delivery rate as
+I(t) =
+
+K
+i
+X
+
+ik 1[t(i) ,t(i) ) (t),
+k
+
+k=1
+
+(11)
+
+k+1
+
+(i)
+
+(i)
+
+where ik is the rate of insulin over the time interval [tk , tk+1 ), again obtained directly from the
+dataset.
+Therefore, substituting (10) and (11) into the general equation (3), the ICU version of our model
+becomes
+
+Ġ(t) = −γ(G(t) − Gb ) +
+
+Km
+X
+
+k=1
+
+dk 1[t(m) ,t(m) ) (t) − β
+k
+
+k+1
+
+Ki
+X
+
+ik 1[t(i) ,t(i) ) (t) +
+k
+
+k=1
+
+k+1
+
+p
+2γσ 2 Ẇ (t).
+
+(12)
+
+In this model, the first term models the glucose removal rate with the body’s own effort (γ), the
+second term shows the effect of nutrition m(t) on the BG level, the third term, βI(t), models the
+external insulin effect, and the last term models unmodeled dynamics by the first three terms as a
+white noise term.
+We integrate (12) to get the analytical solution for any t ≥ t0 as follows
+
+G(t) = Gb + e
+−β
+
+−γ(t−t0 )
+
+Ki
+X
+
+k=1
+
+ik
+
+(G(t0 ) − Gb ) +
+
+Z t
+t0
+
+e
+
+−γ(t−s)
+
+K
+m
+X
+
+k=1
+
+dk
+
+Z t
+t0
+
+e−γ(t−s) 1[t(m) ,t(m) ) (s)ds
+
+1[t(i) ,t(i) ) (s)ds +
+k
+
+k+1
+
+k
+
+p
+
+2γσ 2
+
+Z t
+
+k+1
+
+(13)
+e
+
+−γ(t−s)
+
+dW (s).
+
+t0
+
+As in the previous section, we can also integrate (12) over [tk , tk+1 ) to obtain solutions at event-times,
+with gk = G(tk ),
+
+gk+1 = Gb + e−γhk (gk − Gb ) +
+
+p
+1
+1
+(1 − e−γhk )dk − β (1 − e−γhk )ik + σ 1 − e−2γhk ξk
+γ
+γ
+
+(14)
+
+as another special case of (4). Here, we have four model parameters to estimate: Gb , γ, σ, β.
+Remember once again, Gb is the basal glucose value and γ is the decay rate of the BG level to its basal
+value, and σ is a measure for the magnitude of the BG oscillations. Finally, β is a proportionality
+constant, which is used to scale the effect of IV insulin on the BG rate change appropriately. These
+four parameters represent physiologically valid quantities that could properly resolve the mean and
+variance of the BG level.
+
+10
+
+2.5
+
+Parameter Estimation
+
+In this section we formulate the parameter estimation problem. We construct an overarching Bayesian
+framework for our parameter estimation problems. We then describe two solution approaches for this
+problem: an optimization based approach which identifies the most likely solution, given our model
+and data assumptions; and Markov Chain Monte Carlo (MCMC), which samples the distribution on
+parameters, given data, under the same model and data assumptions. These two solution approaches
+are detailed in the Supplementary Material.
+As shown in detail before, our model takes slightly different forms in the T2DM and ICU settings.
+In the former the model parameters to be estimated are Gb , γ, σ, a, b whereas in the latter the unknown
+parameters are Gb , γ, σ, β. However, we adopt a single approach to parameter estimation. To describe
+this approach we let the vector, θ represent the unknown model parameters to be determined from the
+data, noting that this is a different set of parameters in each case. Many problems in biomedicine,
+and the problems we study here in particular, have both noisy models and noisy data, leading to a
+relationship between parameter θ and data y of the form
+y = G(θ, ζ)
+
+(15)
+
+where unknown ζ is a realization of a mean zero random variable, but its value is not known to us.
+The objective is to recover θ from y. We will show how our model of the glucose regulatory system
+lead to such a model.
+The Bayesian approach to parameter estimation is desirable for two primary reasons: first it allows
+for seamless incorporation of imprecise prior information with uncertain mathematical model and
+noisy data, by adopting a formulation in which all variables have probabilities associated to them;
+secondly it allows for the quantification of uncertainty in the parameter estimation. Whilst extraction
+of information from the posterior probability distribution on parameters given data is challenging,
+stable and practical computational methodology based around the Bayesian formulation has emerged
+over the last few decades; see [93]. In this work, we will follow two approaches: (a) obtaining the
+maximum a posteriori (MAP) estimator, which leads to an optimization problem for the most likely
+parameter given the data, and (b) obtaining samples from the posterior distribution on parameter
+given data, using MCMC techniques.
+Now let us formulate the parameter estimation problem. Within the event-time framework, let
+Ko
+N
+g = [gk ]N
+k=0 be the vector of BG levels at event times {tk }k=0 , and y = [yk ]k=1 be the vector of
+(o)
+
+N
+o
+measurements at the measurement times {tk }K
+k=1 ⊂ {tk }k=0 . By using the event-time version, and
+
+defining {ξk }N
+k=0 to be independent and identically distributed standard normal random variables, we
+
+see that given the parameters θ, g has multivariate normal distribution, i.e., P(g|θ) = N (m(θ), C(θ)).
+Equivalently,
+g = m(θ) +
+
+p
+
+C(θ)ξ, ξ ∼ N (0, I).
+
+(16)
+
+Ko
+Let L be a Ko ×(N +1) matrix that maps {gk }N
+k=0 to {yk }k=1 . That is, if a measurement i ∈ 1, ..., Ko
+
+is taken at the event time tj , j ∈ 0, 1, ..., N , then the ith row of L has all 0’s except the (j + 1)st
+
+11
+
+element, which is 1. Adding a measurement noise, we state the observation equation as follows:
+y = Lg +
+
+p
+
+Γ(θ)η, η ∼ N (0, I),
+
+(17)
+
+where Γ(θ) is a diagonal matrix representing the measurement noise. Thus, we obtain the likelihood
+of the data, given the glucose time-series and the parameters, namely
+P(y|g, θ) = N (Lg, Γ(θ)).
+However, when performing parameter estimation, we are not interested in the glucose time-series itself,
+but only in the parameters. Thus we directly find the likelihood of the data given the parameters
+(implicitly integrating out g) by combining (16) and (17) to obtain
+y = Lm(θ) +
+
+p
+S(θ)ζ, ζ ∼ N (0, I),
+
+(18)
+
+where S(θ) = LC(θ)LT + Γ(θ). Since ζ has multivariate normal distribution, using the properties of
+this distribution, we find that given the parameters, θ, y also has multivariate normal distribution
+with mean Lm(θ) and covariance matrix S(θ). This is the specific instance of equation (15) that arises
+for the models in this paper.
+We have thus obtained P(y|θ) = N (Lm(θ), S(θ)), that is,
+P(y|θ) = p
+
+
+
+1
+exp − (y − Lm(θ))T S(θ)−1/2 (y − Lm(θ)) ;
+2
+(2π)Km det(S(θ)))
+1
+
+(19)
+
+this is the likelihood of the data, y, given the parameters, θ. Also, since we prefer to use − log(P(y|θ))
+
+rather than directly using P(y|θ) for the sake of computation, we state it explicitly as follows:
+
+− log(P(y|θ)) =
+
+Km
+1
+1
+log(2π) + log(det(S(θ))) + (y − Lm(θ))T S(θ)−1 (y − Lm(θ)).
+2
+2
+2
+
+(20)
+
+Moreover, by using Bayes Theorem, we write
+P(θ|y) =
+
+P(y|θ)P(θ)
+∝ P(y|θ)P(θ).
+P(y)
+
+(21)
+
+Note that the second statement of proportionality follows from the fact that the term, P(y), on
+the denominator is constant with respect to the parameters, θ, and plays the role of a normalizing
+constant.
+From another point of view, considering (16) and (18), we see that given θ, (g, y) has multivariate
+normal distribution with mean and covariance matrix that could be computed from the above equations
+since, given θ, everything is explicitly known. Then, integrating g out, in other words, computing the
+marginal distribution we obtain the distribution of y|θ, which corresponds to the one stated in (18).
+Now, to define the prior distribution P(θ) we assume that the unknown parameters are distributed
+
+12
+
+uniformly across a bounded set Θ and define
+
+ 1 ,
+1
+P(θ) =
+1Θ (θ) = |Θ|
+ 0,
+|Θ|
+
+θ ∈ Θ,
+θ∈
+/ Θ,
+
+(22)
+
+where 1Θ (·) is the indicator function and |Θ| is the volume of the region defined by Θ. Thus, by
+
+substituting the likelihood, (19), and the prior distribution, (22), into (21), we formulate the posterior
+distribution as follows
+
+
+1
+T
+−1/2
+p
+P(θ|y) ∝
+exp − (y − Lm(θ)) S(θ)
+(y − Lm(θ)) 1Θ (θ).
+2
+|Θ| (2π)Km det(S(θ)))
+1
+
+(23)
+
+Then, we use this posterior distribution to state the parameter estimation problem whose details
+can be found in the Supplementary Material.
+
+2.6
+
+Experimental Design
+
+In this section, we describe the datasets in more detail, the experiments that we design to present our
+results, and the methods that we follow to perform parameter estimation and forecasting. Depending
+on the specifics of each case and to reflect the real-life situation, we designed different experiments in
+the T2DM and ICU settings. However, the mathematical approaches for parameter estimation and
+forecasting stay the same for both settings because we use similar mechanistic models.
+We theoretically define the observational noise covariance Γ(θ), given in (17), to be a diagonal
+matrix with form diag(Γ(θ)) := λ ∗ Lm(θ), which represents that it is proportional to the mean BG
+
+level. However, we observed that the variation in glycemic response, which we will define later more
+formally, is the sum of the measurement noise and personal glycemic variation, accounted by the model
+parameter, σ. Because of this relationship, for more accurate estimation of σ, we set the measurement
+noise to 0. Note that this is only a practical choice and with this choice, we can still estimate the
+variation in glycemic response accurately.
+2.6.1
+
+T2DM
+
+Model, Parameters, and Dataset
+
+In this setting, we use the model (8) with the function mk
+
+defined as in (9). Hence, there are five parameters to be estimated: basal glucose value, Gb , BG decay
+rate γ, the measure for the amplitude of BG oscillations, σ, and a and b, which are the parameters
+implicitly modeling the time needed for the rate of glucose in the nutrition entering the bloodstream
+to reach its maximum value and the total time needed for this rate to decrease back to 0. We assume
+that the prior distribution is non-informative and initially the parameters are independent, except
+for a constraint on the ordering of a and b. We determine realistic lower and upper bound values for
+each of them, define Θ0 := [0, 750] × [0.01, 0.5] × [0, 100] × [0.01, 0.05] × [0.01, 0.05] (in the order of
+
+Gb , γ, σ, a, b), and then define Θ from Θ0 by adding the constraint a < b. We thereby form the prior
+distribution as defined in (22). Recall that these bounds define the constraints employed when we
+define the parameter estimation problem in the optimization setting for the MAP point. The set
+Θ is determined from clinical and physiological prior knowledge, and by simulating the model (6)
+
+13
+
+and requiring realistic BG levels. Data are collected from three different T2DM patients. Detailed
+information on the dataset can be found in Table 1.
+Patient ID
+Total # glucose measurement
+Total # meals recorded
+Total # days measured
+Mean measured glucose
+Training set: # glucose measurement
+Training set: # meals recorded
+Training set: # days measured
+Training set: mean measured glucose
+Testing set: # glucose measurement
+Testing set: # meals recorded
+Testing set: # days measured
+Testing set: mean measured glucose
+
+patient 1
+304
+122
+26.6
+113±25
+80
+26
+7.02
+112±25
+224
+96
+19.58
+113±25
+
+patient 2
+211
+76
+27.67
+127±32
+53
+18
+7
+116±28
+158
+58
+20.67
+130±33
+
+patient 3
+91
+46
+28.12
+124±26
+29
+15
+7.05
+125±24
+31
+62
+21.07
+123±27
+
+Table 1: Information about the dataset that is used in the T2DM setting, which is collected from three
+different T2DM patients. Note that there is a considerable variability between the data collection
+behavior of each patient, which is also reflected in the number of recorded measurements and meals.
+Also, recall that we intentionally used one week of data for training and the following three week of
+data for testing.
+
+Parameter Estimation and Uncertainty Quantification We perform parameter estimation for
+three patients separately. First, we estimate parameters by using data over four consecutive, nonoverlapping time intervals with optimization and MCMC approaches. Besides estimated values, we also
+provide UQ results. In the optimization setting, we use the Laplace approximation as detailed in the
+Supplementary Material. The optimal parameters determine the mean of the Gaussian approximation,
+and the inverse of the Hessian matrix becomes the covariance matrix, providing the tools for UQ. In
+the MCMC approach, we use the resulting random samples for UQ.
+Forecasting We adopt a train-test set-up as follows. Since the health conditions of the T2DM
+patients are unlikely to change over time intervals that are on the order of days, we design an experiment
+in which we use one week of data for estimating the patient-specific parameters. Then, we use the
+estimated parameters to form a patient-specific model and use this model to forecast BG levels for the
+following three weeks, using the known glucose input through the meals; this leads to a three-week
+testing phase. We provide a visual representation of this process in Fig 1. From a practical patientcentric point of view this leads to a setting in which forecasting BG levels for the following three weeks
+requires patients to collect BG data for only one week in every month, and then the patient-specific
+model will be able to capture their dynamics and provide forecasts based on nutrition intake data over
+the rest of the month.
+
+14
+
+Figure 1: This schema shows how we divided T2DM patients’ data into training and test time windows.
+For each patient, the first week of data is the training time window used to estimate the model. The
+estimated model represents each patient’s personalized BG behavior and is used to forecast BG values
+over the test time window, which is of length three weeks and follows the training time window.
+2.6.2
+
+ICU
+
+Model, Parameters, and Dataset
+
+In the ICU setting, we use the model (14), and there are now
+
+four parameters to be estimated: basal glucose value, Gb , BG decay rate, γ, the parameter used to
+quantify the amplitude of the oscillations in the BG level, σ, and a proportionality constant, β to
+scale the effect of insulin IV on the BG level. Similar to what we did in the T2DM setting, we find
+realistic lower and upper bounds for the unknown parameter values and set Θ := [0, 750] × [0.02, 0.5] ×
+
+[0, 100] × [20, 110] to obtain the prior distribution as defined in (22). In this case, we impose two further
+linear constraints, namely Gb − 3.5 ∗ β < 115 and β − 1110γ < 10. These constraints are imposed
+
+to ensure that the model predictions remain biophysically plausible, and are determined simply by
+forward simulation of the SDE model; the resulting inequality constraints do not overly constrain the
+parameters in that good fits can be found which satisfy these constraints, and yet they yield more
+realistic BG level behavior than solutions found without them. Thus as in the T2DM case, we choose
+the bounds and the constraints based on physiological knowledge and requiring simulated BG levels
+resulting from values within the region Θ to be realistic.
+Patient ID
+Total # glucose measurement
+Total # days measured
+Mean measured glucose
+Training set: average # glucose measurement
+Testing set: average # glucose measurement
+
+patient 4
+177
+13.99
+141±18
+14.13
+1
+
+patient 5
+204
+16.8
+151±32
+13.5
+1
+
+patient 6
+271
+24.48
+151±43
+14.07
+1
+
+Table 2: Information about the dataset that is used in the ICU setting, collected from three ICU
+patients who are not T2DM. Because of the experiment we designed the training sets are moving with
+by overlapping with each other. So, we provide average number of glucose measurements over these
+moving windows. Also, since we forecast until the next measurement time following the training time
+window, each testing set contains only one glucose measurement. Other information that is included
+in Table 1, but not here, such as mean measured glucose over training set(s) is neither meaningful nor
+helpful in this setting.
+Summary statistics about our ICU dataset can be found in Table 2. Note that in this case, we used
+all available data for each patient to perform parameter estimation and forecasting, and all three ICU
+15
+
+patients are non-T2DM.
+Parameter Estimation and Uncertainty Quantification
+
+We use both the optimization and
+
+MCMC approaches for parameter estimation in a patient-specific manner, in this setting, too. However,
+for UQ, we use only MCMC to estimate the posterior mean and variance on the parameter; this is
+because there were cases where it was not appropriate to use the Laplace approximation, something
+that will be explained in more detail in Section 3.2.
+Forecasting
+
+The characteristics of the health conditions of ICU patients are described in Section
+
+2.1. The abrupt changes in their health conditions are reflected in the model parameters. To avoid
+compensating for different values of parameters over longer time intervals, and to make more accurate
+predictions, we use only one day of data for parameter estimation in the ICU. Moreover, to construct
+an experiment that reflects real-life scenarios, we need be able to estimate the model parameters with
+smaller size datasets than in the T2DM case, because of the imperative of regular intervention within
+the ICU setting, typically on a time-scale of hours. As a consequence our train-test set-up in this case
+differs quantitatively from the T2DM case. The training sets for each patient consist of approximately
+one day of data over a moving time intervals, with end points chosen to be BG measurement times.
+Thus, the time windows are obtained by moving the right end point to the next BG measurement time
+and choosing its left end point with the constraint that it contains approximately one day of data. In
+this case, there is a large overlap between the consecutive time windows of the training sets.
+On the other hand, because of rapidly changing conditions, forecast of BG levels needs only to be
+accurate over shorter time-scales. It is important to know glycemic dynamics on the order of hours
+(not days) to manage the glycemic response of ICU patients. Thus, the test time windows include only
+one BG measurement, which is the next BG measurement collected right after the BG measurement
+defining the right end point of the corresponding training time window. We follow the same procedure
+over the moving time intervals to the end of the whole dataset for each patient. We visually exhibit
+this procedure in Fig 2. From a practical point of view, this experiment exhibits a real life situation
+
+Figure 2: This schema shows our experimental design for the ICU setting. Each training time window
+has a length of approximately 24 hours, which is used for model estimation. Then, we forecast the first
+BG value measured after the training time window. We perform this prediction for the whole dataset
+by moving the time windows.
+
+16
+
+in which we use only one day of data for parameter estimation and then perform forecasting for the
+next few hours based on the estimated parameters. Such a set-up would be desirable as a support to
+glycemic management of these patients.
+
+2.7
+
+Model Evaluation
+
+In this section, we introduce the statistics that we will use to evaluate and compare the forecasting
+capability of the models. Let {yi }N
+i=1 denote the true BG measurements over the predefined testing time
+
+window for an experiment. Let {ŷi }N
+i=1 denote the forecast obtained by a model at the measurement
+time points . Note that for a stochastic model, {ŷi }N
+i=1 represents the mean of the model output. When
+
+a stochastic model is used, it is natural to obtain a confidence interval as this may be obtained as a
+direct consequence of the fact that the model output is in the form of a random variable; such an output
+cannot be obtained for an ODE model when parameters are learned through optimization. However,
+by using appropriate parameter and state estimation techniques, it may again be possible to obtain a
+similar kind of confidence interval for the model output which is in the form of a point-estimate. When
+we have probabilistic forecasts we let {i }N
+i=1 denote the corresponding standard deviation for each
+forecast at the true measurement points so that we can form 1- and 2-stdev bands as [ŷi − i , ŷi + i ]N
+i=1
+
+and [ŷi − 2i , ŷi + 2i ]N
+i=1 , respectively. Then, for each model, we can compute the percentage of true
+
+measurements, {yi }N
+i=1 , that are captured in their respective 1- and 2-stdev bands. These percentages
+
+will be the tools that we will use for evaluation. In addition, we will use standard measures such as
+
+root-mean-squared error (RMSE), mean percentage error (MPE), and Pearson’s correlation coefficient,
+(CORR) which are computed as follows.
+v
+u
+N
+u1 X
+RM SE = t
+(yi − ŷi )2 ,
+N i=1
+
+MPE =
+
+N
+X
+|yi − ŷi |
+i=1
+
+yi
+
+∗ 100,
+
+N
+CORR = corr {yi }N
+i=1 , {ŷi }i=1
+
+
+
+In addition to these metrics, we compare the forecasting accuracy of this model with other physiologybased mechanistic models. In T2DM setting, we use the longitudinal diabetes pathogenesis model
+(LDP), [94] , describing BG dynamics of T2DM patients. In the ICU setting, we use ICU Minimal
+Model (ICUMM), introduced in [29, 88] describing BG dynamics of ICU patients. Also, in both settings,
+we use simply the mean and variance computed from the respective training data for comparison. We
+call this model, mean-variance model. We provide more detail about these models in Sections 3.1.3
+and 3.2.3.
+Here, by comparing models, we mean comparing their forecasting accuracy. However, both the
+LDP model and ICUMM are nonlinear mechanistic models while our model is a linear mechanistic
+model. Using these models within predictive algorithms requires computational model estimation to
+solve for the best model parameters and states that fit the patient data. A model estimation problem
+formulated based on a nonlinear model has multiple minima while the one formulated based on a
+linear model generally has a unique minimum that produces the optimal solution to model estimation
+problem. However, when there is multiple minima, it is almost impossible to find estimate the global
+minimum. Because of these characteristic differences, an absolute comparison between a nonlinear
+
+17
+
+model and a linear model is impossible. Therefore, comparison of prediction accuracy between these
+different type of models should be carefully handled. For example, obtaining a smaller error with a
+linear model does not imply that this model is better than the nonlinear model, as it is unknown if the
+global minimum is reached by the nonlinear model. However, comparing the prediction accuracy is
+useful to have a sense of the level of prediction accuracy achieved by these models.
+
+3
+
+Results
+
+In this section, we present results concerning the simple yet interpretable model introduced in this paper;
+we now refer to this as the minimal stochastic glucose (MSG) model. The two primary conclusions are
+that:
+• We obtain BG forecasting results at least as accurate as other established models in both the
+T2DM and ICU settings, [88], and the uncertainty bands with which we equip our forecasts play
+an important role in this regard;
+• We learn a substantial amount about the interpretable parameters within the models, with
+possible clinical uses deriving from the parameter estimates, and from tracking them over time,
+again using the uncertainty measures that accompany them as measures of confidence.
+The combination of simple predictive model and data acquisition accounts for the uncontrolled and
+complex nature of the data, including data sparsity, inaccuracy, noisiness, non-stationarity, and biases
+resulting from the health care process [17, 21, 95–100], whilst also being interpretable and leading to
+patient-specific parameter inference and prediction. Even though the MSG model is relatively simple
+it is not always identifiable, given data. For example, having two parameters, γ and β, related to
+BG decay rate in the ICU context made it hard to identify these parameters accurately because of
+the complexities mentioned above. Despite lack of identifiability of some parameters, parameters as
+estimated lead to models which are able to forecast and represent the glucose dynamics. To answer
+whether the parameter estimates, forecasts, and uncertainty quantification are good enough to impact
+clinical understanding and decision-making or to construct physiologically-anchored phenotypes would
+require evaluation, [20, 22, 81] e.g., manual chart review in conjunction with a qualitative trial of
+clinical decision-making or a phenotyping analysis respectively. In the absence of these analyses we
+will rely on face validity, [101–103], to evaluate effectiveness of the model in representing the dynamics
+and in forecasting.
+
+3.1
+
+T2DM
+
+In this setting, our results demonstrate the effectiveness of the MSG model in capturing the patients’
+BG dynamics. Specifically the effectiveness is reflected in the estimated parameter values and in
+forecasting future BG levels, using these parameters, over time periods of length up to three weeks.
+
+18
+
+3.1.1
+
+Parameter Estimation
+
+Our results exhibit three substantive pieces of evidence that support the validity of the model and its
+potential effectiveness for understanding the physiologic state of an individual and forecasting. First,
+the estimated model parameter values and their evolution over time are physiologically valid. That
+is, the estimated values reflect the patient’s state as evaluated given available data. Moreover, the
+evolution of the estimated parameter values over time reflects changes in the patients’ states in a
+manner consistent with both the data and what is known about the non-stationary nature of T2DM.
+Second, the UQ intervals for the estimated parameters are physiologically plausible and have three
+features that make the model potentially useful: (i) relative to the value of the estimated parameter,
+the UQ intervals are wide enough to provide information on the reliability of the point estimates,
+(ii) the UQ intervals’ evolution over time, demonstrating sensitivity to time and the ability to adapt
+to non-stationary patients, and (iii) the UQ intervals are narrow enough to plausibly be used to
+differentiate behavior choices, such as carbohydrate consumption. And third, the UQ and parameter
+estimation appears to be robust; different estimation methods arrive at similar results. A comparison
+of the estimated parameter values and corresponding UQ intervals obtained using optimization and
+MCMC are very similar in almost all of the cases, supporting the robustness of the estimates and
+relative insensitivity to the estimation methodology. Together, these features imply that with a
+reasonable inference scheme, this model could provide useful information for decision-making and a
+robust clinical understanding of the patient.
+To demonstrate that the estimated parameters are physiologically valid, consider Fig 3 where we
+see the point estimates and UQ intervals for all parameters and all three patients obtained with
+optimization and MCMC methods. The estimated basal glucose, Gb , values are in the ranges of
+∼ 95 − 105 mg/dl, ∼ 105 − 140 mg/dl, and ∼ 105 − 125 mg/dl over the course of four weeks for
+patients 1, 2, and 3, respectively. These values are indeed in the expected ranges based on the BG
+measurements of these patients.
+To show that the UQ intervals are potentially useful in practice, once again consider Fig 3. The
+range of UQ intervals for each estimated parameter in most cases contains physiologically plausible
+parameter values that are tight enough to enforce the reliability of the point estimates. To quantify
+this statement we computed the coefficient of variation, defined as the standard deviation divided by
+the mean and can be interpreted as a measure of variability of the point estimator in this context. For
+Gb and σ, which are the most influential parameters in characterizing the mean and variance of the
+model output, the coefficient of variation is in the ∼ 1 − 5% band and ∼ 4 − 14% band, respectively
+for all three patients. These results support the reliability of the point estimates that are used to form
+patient-specific models to describe dynamics of each patient.
+We can see the robustness of the estimated parameter values by comparing parameter estimates
+using two different methods, optimization and MCMC. The results are shown in Fig 3; the upper
+and lower panels show parameter estimates using optimization and MCMC, respectively. The point
+estimates as well as the corresponding UQ intervals for Gb and σ obtained with optimization and
+MCMC are very close to each other in most cases. Some parameters have more variation between
+methods; specifically, γ, a, and b do show variation between the results obtained with optimization
+and MCMC methods. This variation does not seem to have substantial effect on the model’s ability
+
+19
+
+(a) optimization
+
+(b) optimization
+
+(c) optimization
+
+(d) MCMC
+
+(e) MCMC
+
+(f) MCMC
+
+Figure 3: Parameter estimation and uncertainty quantification in the T2DM setting. The top panel
+is obtained with optimization and the bottom panel is obtained with MCMC, both are in a patientspecific manner. It shows that the point estimates obtained with two approaches are very close to
+each other in most cases. Also the width of the 1- and 2-stdev intervals, which are obtained with
+Laplace approximation (optimization) and directly from the approximate posterior samples (MCMC),
+are also in agreement with each other. The parameter estimates and agree with real physiological
+values and the non-stationary behavior of the glucose dynamics of T2DM patients is reflected in the
+time-evolving behavior of the estimated parameters. All these features enforce the reliability of the
+parameter estimation results.
+to represent patient dynamics. The overall result is a model whose ability to represent the data is
+relatively insensitive to parameter estimation techniques.
+
+20
+
+3.1.2
+
+Forecasting
+
+We evaluate forecasting ability of the model in this setting along two pathways, a face validity pathway
+that is mostly motivated by potential clinical decision-making, and a more statistical-based pathway
+that is motivated by our desire to be quantitative. In a sense, both evaluations address whether the
+data could plausibly be generated by the model.
+
+(a) Model output with BG measurements
+
+(b) KDE - Patient 1
+
+(c) KDE - Patient 2
+
+(d) KDE - Patient 3
+
+Figure 4: On the top row, the model output of the estimated stochastic process is shown over the week
+of the training data along with the true BG measurements, and on the bottom row, kernel density
+estimate (KDE) of 1,000 different realizations of the estimated model output and BG measurements are
+shown for each patient. In (a), the red circles show true BG measurements, the blue curve shows the
+mean of the model output, and the gray area represents the estimated 2-stdev band around the mean.
+Comparison of the true BG measurements, which are assumed to be a realization of the model output,
+with the mean and 2-stdev band of the stochastic process—being the model output—along with the
+KDE plots in (b)-(d) implies that BG measurements could indeed be considered as a realizations of
+the random process.
+The first evaluation—face validity—is to consider whether the model can capture the dynamics
+qualitatively. Because the model’s forecast is in the form of a distribution, the forecast we have to
+evaluate is anchored to the mean and standard deviation. In Figs 4a and 5, the red circles are the
+BG measurements and from our modeling perspective are also a realization of the stochastic process
+whose mean is shown by the blue curve and variance is represented by the gray region. Fig 4a shows
+the training time window for one of the patients and Figs 5a-5c show the test time window for each
+patient. An initial inspection of these figures implies that the model output seems to represent the
+21
+
+data well. One important and challenging task of a forecast is accurate estimation of uncertainty.
+Because of the idiosyncrasy of our stochastic model, uncertainty is quantified naturally using the
+covariance function of the model process. Fig 5 demonstrates the model’s effectiveness in capturing
+relevant forecast uncertainty with two standard deviation (2-stdev) bands around the model mean;
+these bands capture most of the future BG measurement. These results are further quantified in Table
+3 that shows summary statistics for how often the future measurements were captured by the 2-stdev
+bands. Being able to contain ∼ 89 − 97% of the true BG measurements in these confidence regions
+for all three patients is an indicator of this model’s predictive capability. Because of more dangerous
+
+consequences of hypoglycemia, we also check the percentage of measurements that are smaller than
+the lower 2-stdev band, i.e., missed by the 2-stdev band on the lower-end, over the test time window,
+which are 1.79% (four measurements out of 224 total BG measurements), 0%, and 0% for patient 1,
+2, and 3, respectively. These four measurements for patient 1 are 88, 94, 102, and 118 mg/dl, and
+the lower bound of the 2-stdev band for these measurements are estimated to be 94, 99, 105, and
+123 mg/dl. Also, this patient had total of 31 BG measurements in the range of 68-88 mg/d, and the
+estimated 2-stdev band missed only one of BG measurements (88 mg/dl) in that range and estimated
+the possibility of occurrence of all the remaining ones. This result shows that model could provide
+decision support for the possible occurrence of hypoglycemia. Thus, this model is providing substantial
+forecasting information beyond what is available given the data alone.
+The second evaluation quantifies how plausible it is that the data we observe could have originated
+from the model. We quantify this plausibility using the two-sample Kolmogorov-Smirnov (KS) test.
+To start, Fig 4b-4d show the kernel density estimates (KDEs) obtained from the BG measurements
+(red curve) and from 1,000 independent realizations of the estimated stochastic process (blue curves)
+over the training time window for each patient. The KDEs in Fig 4b-4d support the idea that the
+BG measurements could be assumed to be drawn from the distribution given by the estimated model
+output. To perform the two-sample Kolmogorov-Smirnov (KS) test we created datasets by resampling
+10,000 independent realizations of the model output at the BG measurement times and performed the
+test using each generated sample against BG measurements with the kstest2 function in MATLAB with
+1% significance level. We performed this procedure over one-week of training window and three-week
+of test window for each patient separately. Note that the null hypothesis states that the two samples
+are drawn from the same distribution and not rejecting the null hypothesis supports that our model
+could accurately represent the distribution of the measurements. Moreover, the null hypothesis here is
+a distributional one so that re-ordering measurements or forecasts will have no effect on the KS test.
+Out of 10,000 different samples in each case, the rejection rates were 0.55%, 0.02%, and 0.59%
+over the training time window and they were 1.65%, 67.54%, and 0.38% over the test time window,
+respectively for patients 1, 2, and 3. First, observe that the rejection rates are much smaller over the
+training time window. This is expected as the random samples used against the BG measurements in
+the KS test are generated by the model output estimated using the same BG measurements. However,
+the model output used to generate samples over the test time window was obtained only using the
+patient-specific model, which is trained by the training data and nutrition intake data of those patients
+over the test time window. Therefore, even though we have a high rejection rate for patient 2 over the
+test time window, those much smaller numbers for patients 1 and 3 are still reassuring and show that
+
+22
+
+(a) Patient 1
+
+(b) Patient 2
+
+(c) Patient 3
+
+Figure 5: Forecasting results in the T2DM setting obtained via models formed by using the estimated
+parameters with the optimization approach. In each plot, the red circles show the true BG measurements,
+the blue curve shows the mean of the model output, and the gray region is the estimated 2-stdev
+band around the mean of the model output. These forecasting results show that the proposed model
+mean, when equipped with confidence bands found from standard deviations, estimate the BG levels
+accurately, and in a patient specific way. This reinforces the claim that the model parameters could be
+used to provide information about the health condition of individual patients.
+
+23
+
+our initial assumption, which is that our simplified stochastic model can describe the BG values, is a
+valid assumption in this setting.
+While the KS test establishes the distributional similarity between the data and our fitted model,
+we also evaluate pointwise correlations to establish the validity of the model’s predicted dynamics; i.e.,
+responses to meals. We report the Pearson correlation coefficients in Table 3, and show substantial
+positive correlation. This indicates that our model is superior to a constant statistical model of the
+data distribution.
+Finally, we see from Fig 5b that the mean of the model output exhibits unusually high peak BG
+values after the meals. In addition, the Kolmogorov-Smirnov test has a high rejection rate for this
+patient. Investigation of parameter values shown in Fig 3a-3c reveals that there is an order of magnitude
+difference between estimated gamma values for patient 2 and for patients 1 and 3. Since γ represents
+the decay rate to the patient’s basal glucose value, we hypothesized the reason for not estimating
+the gamma parameter accurately for this patient could be related to their BG measurement pattern.
+To investigate, we checked the time difference between the recorded meal times and the first BG
+measurement times after each meal. We found that patient 2 had 18 meals over their training time
+window and that time difference was exactly 2 hours for each meal. Patients 1 and 3 had variability
+among their measurement times. We believe such a regular measurement pattern without any variability
+is the reason for not being able to estimate the gamma parameter, representing the decay rate to
+the basal glucose value. In addition, we believe this is also the reason for the high rejection rate for
+Kolmogorov-Smirnov test for patient 2. We provide more detail about the BG measurement pattern of
+these patients in the Supplementary Material.
+3.1.3
+
+Comparison of Forecasting Accuracy with Longitudinal Diabetes Pathogenesis
+Model
+
+In this section, we compare the forecasting accuracy of the T2DM version of the MSG model with a
+well-known model, the longitudinal diabetes pathogenesis (LDP) model developed by Ha & Sherman
+[94] and a simple mean-variance model. The LDP model is developed to understand different pathways
+of T2DM pathogenesis. It represents the metabolic state of T2DM patients at any time during
+the disease progression over years. The model consists of four differential equations and 11 model
+parameters. We do not attempt to estimate all these parameters as it is not feasible with the available
+sparse data. We perform the same forecasting task by estimating three different sets of parameters,
+{σ, SI}, {σ, SI, hepaSI}, {σ, SI, hepaSI, r20}, and setting the remaining parameters at known default
+
+values.
+
+The experiment in this setting will be the same as described above in Section 3.1.2. For a fair
+comparison, mean-variance model corresponds simply to computing the sample mean and variance
+from the training data and to using the mean as the point estimator over the test time window and
+the variance for uncertainty quantification in the forecast. On the other hand, the LDP model consists
+of a set of coupled ODEs. To estimate the unknown model parameters and forecast BG levels with the
+LDP model we used the constrained Ensemble Kalman Filter (EnKF) algorithm, [104]. We coded the
+algorithm on MATLAB for parameter estimation and BG forecasting using the constrained EnKF method
+based on the LDP model. We used MATLAB’s ODE solver ode23 to solve the LDP model numerically.
+
+24
+
+MSG Model
+σ, SI
+LDP Model σ, SI, hepaSI
+σ, SI, hepaSI, r20
+Mean-Variance Model
+
+MSG Model
+σ, SI
+LDP Model σ, SI, hepaSI
+σ, SI, hepaSI, r20
+Mean-Variance Model
+
+MSG Model
+σ, SI
+LDP Model σ, SI, hepaSI
+σ, SI, hepaSI, r20
+Mean-Variance Model
+
+Patient 1
+1-std % 2-std %
+75.45
+93.30
+41.96
+65.62
+40.18
+66.96
+43.30
+65.62
+73.66
+95.98
+Patient 2
+1-std % 2-std %
+63.29
+89.24
+20.89
+37.34
+15.82
+32.91
+18.35
+33.54
+68.99
+90.51
+Patient 3
+1-std % 2-std %
+51.61
+96.77
+29.03
+50.00
+30.65
+53.23
+19.35
+46.77
+58.07
+95.16
+
+RMSE
+20.12
+22.89
+22.00
+22.09
+24.48
+
+MPE
+12.97
+13.72
+13.77
+13.59
+16.97
+
+CORR
+0.5680
+0.5090
+0.4995
+0.5737
+0
+
+RMSE
+33.52
+39.54
+44.18
+40.38
+35.54
+
+MPE
+17.35
+21.00
+24.20
+21.71
+18.17
+
+CORR
+0.3674
+0.3122
+0.3019
+0.3536
+0
+
+RMSE
+24.27
+32.20
+32.88
+33.43
+26.96
+
+MPE
+17.12
+18.98
+18.69
+19.81
+18.74
+
+CORR
+0.4759
+0.3750
+0.4032
+0.4019
+0
+
+Table 3: Comparison of the forecasting results with three different models. For each different case of
+the LDP model the results in the corresponding row shows which parameters are estimated during the
+whole forecasting experiment. We obtain better forecasting accuracy with the MSG model than with
+the LDP model and mean-variance model, in general. Furthermore, for the LDP model, the forecasting
+accuracy decreases as the number of parameters being estimated increases.
+Note that we use the constrained EnKF algorithm because it is validated to provide accurate
+forecasting results with complex ODE models [104]. Moreover, the ensembles of state estimates could
+be used for uncertainty quantification. However using a filtering algorithm requires exploiting all the
+data collected up until the forecasting time point; unlike the optimization algorithm paired with MSG
+model, which could use data collected only over the training time window to train the model and then
+simulate over the test time window for forecasting. Note that with LDP model - EnKF algorithm
+pair, we used all the data contained in the training and test time windows. Then, we used the BG
+forecasting values over the test time window for comparison. The comparison results are shown in
+Table 3.
+The results in Table 3 show that the MSG model provides better accuracy in forecasting future BG
+levels in T2DM patients than all variants of the LDP model and mean-variance model when compared
+holistically.
+First, MSG model achieves smaller RMSE and MPE than all different variations of the LDP model
+and mean-variance model for all three patients, demonstrating that mean of the MSG model output is
+also preferable as a point estimator.
+Second, we see the advantage of using a stochastic model which inherently quantifies the level of
+certainty in the BG predictions. It is worth noting that the MSG model is based on learning parameters
+of a stochastic model, whilst the LDP quantifies uncertainties by learning an ensemble of parameters
+
+25
+
+and states; this may contribute to the differences between them at the level of uncertainty prediction.
+The percentages in Table 3 show that the MSG model is substantially better than the LDP model in
+capturing the true measurements in the corresponding confidence bands whereas it is not as good as
+mean-variance model for these percentages. Nevertheless, the comparison of the correlation values
+over the test time window supports the better forecasting accuracy with the MSG model. In summary
+the MSG model is preferable to the LDP and mean-variance models for decision making within the
+context we use here, as it possesses the good features when compared with different type of models.
+When compared with a mechanistic model as itself (the LDP model here), the MSG model gives a
+better point forecasts and better confidence bands, enabling knowledge of possible high and low values
+for future BG levels. On the other hand, when compared with the most simple data driven model, it
+still provides better overall forecasting accuracy.
+
+3.2
+
+ICU
+
+We now move to the more complex and difficult case of modeling and forecasting glycemic dynamics
+in the ICU, where non-stationarity is manifest on much shorter time-scales. Parameter estimation and
+forecasting are, in general, harder in the ICU context because of the characteristics of ICU patients as
+explained in Section 2.1. A detailed explanation about how the MSG model represent the dynamics in
+ICU setting is provided in the Supplementary Material.
+3.2.1
+
+Parameter Estimation
+
+The difficulties presented in the ICU setting are reflected in our parameter estimation results. Despite
+these complexities, our results exhibit four substantive pieces of evidence which support the validity
+of the model and its potential effectiveness for understanding the physiological state of ICU patients
+and for forecasting. First, the model captures the dynamics reflected in the parameter estimates with
+sparse data. Second, the estimated model parameters, which have the most influence in resolving the
+mean and variance of the BG level, are physiologically valid in most of the cases. Third, the changes in
+the parameter estimation results over moving time windows are realistic and reflective of the expected
+non-stationary behavior of ICU patients. And fourth, the UQ results show that the parameters (basal
+glucose rate, Gb and the model standard deviation, σ), which have the most influence in resolving
+mean and variance of BG levels are estimated with more certainty. Having tighter bands around the
+point estimates for these parameters indicates the robustness of the estimation. We explain these
+claims in detail in the following paragraphs. Fig 6 contains evidence supporting all these results and
+Table 2 shows the sparsity of the BG measurements.
+With the complexity of ICU data in mind, consider the parameter estimation results. Figure 6
+shows the parameter estimates over moving time windows with length of 24 hr for each ICU patient
+obtained with MCMC approach. The mean of each chain is shown using blue stars. These parameter
+estimates are physiologically plausible for all three patients except in a small number of cases. For
+example, estimates of the basal glucose rate, Gb , were around ∼ 105 − 145mg/dl, ∼ 140 − 180mg/dl,
+∼ 135 − 210mg/dl, for patients 4, 5, and 6, respectively, all plausible values given the patient’s data.
+
+As shown in the Supplementary Material, it was not possible to compute good estimates for parameters
+
+26
+
+(a) patient 4
+
+(b) patient 5
+
+(c) patient 6
+
+Figure 6: Parameter estimation and uncertainty quantification results in the ICU setting obtained
+with MCMC. In each plot, the blue stars are the point-estimate of each parameter and the gray area
+is the 2-stdev band around the point-estimates (both obtained from the resulting random samples).
+The estimated model parameters exhibit biophysically realistic values. Also, 1- and 2-stdev bands
+enforces the reliability of the estimated parameters, especially, Gb and σ, which are the most influential
+parameters in predicting the mean and variance of BG levels.
+
+27
+
+γ and β in some of the cases.
+Fig 6 also shows that the time evolution of the estimated parameters is realistic within the ICU context.
+In ICU the training time windows move in positive (increasing time) direction of measurements—given
+a measurement the model is estimated using the previous 24 hours of data, ∼ 14 data points to forecast
+the future measurement whenever it comes—so that the consecutive time windows have an overlap
+of 20-23 hours. This means that the model varies relatively continuously between consecutive time
+windows. This relative continuity is reflected in Fig 6 that shows the time evolution of estimated
+parameters for all three patients. Even though the health condition of the ICU patients can change
+rapidly, the estimated parameters do not change wildly (in most of the cases), reflecting the expectation
+under these settings. Nevertheless, the patients are clearly non-stationary and the observed evolution
+of the parameter estimates, shown in Fig 6, reflects this non-stationarity.
+And finally, as was the case in the T2DM setting, the model is relatively robust to the methods used
+to estimate it; however, as can be inferred from the discussion above about parameters and their face
+validity to physiology, the ICU formulation of the model can have more complex parameter estimation
+issues compared to the T2DM setting. In particular, in the ICU setting there are some cases where
+the Laplace approximation does not work well because the parameter misfit solution surface is flat in
+some parameter directions – a reflection of identifiability issues. We provide more insight about this
+issue in Supplementary Material. Even though the point estimates for each patient and parameter pair
+by MCMC and optimization are close to each other, since UQ results are more meaningful by MCMC,
+we present the plots obtained by MCMC. In general we observe that Gb and σ, both allow for more
+robust estimation compared to the estimation of γ and β. The robustness of the estimation of Gb and
+σ is important for clinical applications because the mean and variance are what is used for glycemic
+management. As a demonstration of the robustness of Gb and σ, consider Fig 6. Here we can see the
+2-stdev band around the mean for Gb and σ is tighter than the 2-stdev bands for γ and β for all three
+patients. Remember that both γ and β are related to the glucose removal rate from the blood. This
+is, perhaps, an indicator of an identifiability issue for these parameters. But it is also true that we
+are indeed less certain about this physiology; glucose can be removed at different rates by different
+physiological processes, e.g., liver versus adipose tissue, and we are not resolving these physiological
+subsystems. Moreover, due to the non-stationary and sparse nature of the data in the ICU setting, it
+is harder to estimate some of the model parameters accurately. Separating these inference issues is not
+possible given the data presently collected in these settings. Nevertheless, the parameters that play a
+key role in resolving the mean and variance of the BG dynamics can be estimated accurately up to the
+desired level.
+3.2.2
+
+Forecasting
+
+Forecasting results in the ICU setting are indicative of two major features of this model: (i) we can
+capture the trend of BG measurements through the mean of the model and (ii) we can estimate the
+variance of the BG measurements accurately. Once again, since resolving mean and variance of BG
+dynamics is central to glycemic management, these results show potential usefulness of this model in
+the ICU context.
+Fig 7 demonstrates that the forecasted mean of the model output encapsulates the essence of the
+
+28
+
+(a) patient 4
+
+(b) patient 5
+
+(c) patient 6
+
+Figure 7: Forecasting results obtained based on parameters estimated with MCMC, in the ICU setting.
+In each plot, the red circles show the true BG measurements, the blue stars show the mean of the
+model output, and the gray region shows the 2-stdev band around this mean. These results are, in
+general, very close to those obtained using the optimization approach, and the most relevant properties
+are shared by them both. Obtaining similar results with another numerical solution technique based
+on the same mechanistic model shows the reliability of the model and estimated model parameters.
+
+29
+
+behavior of BG measurements for all three patients. In each of the plots in Fig 7, the red circles show
+the BG measurements, the blue stars are the mean of the model, and the gray region is the 2-stdev
+band around the mean, each one obtained separately with the corresponding patient-specific model.
+To observe the effectiveness of this model in estimating the variance of the BG measurements
+accurately, consider Fig 7 and Table 4. Fig 7 shows the ability of the model to estimate the variance
+in glycemic dynamics visually where a large number of true BG measurements are contained in the
+gray regions that represent the forecasted 2-stdev bands around the forecasted mean. These results are
+quantified in Table 4 which contains summary statistics both for optimization and MCMC methods
+and demonstrate the forecasting accuracy of the MSG model and imply potential use in the ICU for
+glycemic management. Note that given the forecast, data, and the fundamental challenges of the
+ICU setting, we should expect forecast UQ bands to be quite large. But, this does not mean it is not
+valuable to clinicians but rather means that we can provide a realistic estimate of the uncertainty in
+an extremely volatile and poorly measured system.
+3.2.3
+
+Comparison of Forecasting Accuracy With The ICU Minimal Model
+
+In this section, we use the ICUMM and mean-variance model in a similar manner as in T2DM context
+for the comparison of the forecasting results. The ICUMM is a physiological model that represents the
+glucose-insulin dynamics of ICU patients and was developed to be used for glycemic management in
+ICU. The model consists of four coupled differential equations and has 12 model parameters. One of
+those model parameters is used for the purpose of having units equal on both sides of the equation and
+set to 1. Two of the model parameters represent the volume of glucose and insulin distribution space
+and are set to nominal values from the literature. This leaves us with nine unknown model parameters
+to be estimated. For parameter estimation and BG forecasting, we used the constrained EnKF method,
+which enables us to obtain confidence bands for the forecasting results using the ensembles. We
+implemented the BG forecasting algorithm using the EnKF method based on the ICUMM on MATLAB.
+We used MATLAB’s ODE solver ode45 to obtain the solution of ICUMM. The mean-variance model
+simply uses the mean and variance of BG measurements over the training time window for forecasting.
+The comparison results are shown in Table 4. These results indicate the efficiency of the MSG model
+in forecasting BG measurements and assessing the uncertainty in the forecasted values.
+First, the point estimators in the MSG case exhibit comparable, or improved, accuracy in comparison
+to the ICUMM and mean-variance model, i.e., RMSE and MPE are smaller for the MSG model
+obtained either via optimization or MCMC. In addition, correlation values obtained with the MSG
+model are significantly larger than those with the ICUMM and mean-variance model. These results
+show that with a relatively simple model, we are able to reach the same, or better, accuracy in
+forecasting BG behavior than a more physiologically based high-fidelity model, with a larger number
+of unknown model parameters.
+Second, the confidence bands that we use to quantify possible high and low values of BG level
+could provide better results than ICUMM. Compared to ICUMM, the improved accuracy of the MSG
+model in terms of uncertainty forecasting may be related, in part, to the fact that the model we use
+is inherently stochastic, and fits the stochastic fluctuations to data; in contrast, ICUMM provides
+uncertainty bands only through the ensemble of solutions which are a product of the algorithm used to
+
+30
+
+optimization
+MSG Model
+MCMC
+ICUMM
+Mean-Variance Model
+
+optimization
+MSG Model
+MCMC
+ICUMM
+Mean-Variance Model
+
+optimization
+MSG Model
+MCMC
+ICUMM
+Mean-Variance Model
+
+Patient 4
+1-std % 2-std %
+56.14
+89.47
+60.82
+91.81
+45.61
+80.12
+59.06
+94.15
+Patient 5
+1-std % 2-std %
+58.65
+83.97
+64.14
+88.19
+29.54
+53.59
+64.14
+89.87
+Patient 6
+1-std % 2-std %
+59.04
+87.45
+63.84
+91.14
+18.45
+38.01
+63.84
+91.14
+
+RMSE
+17.27
+18.60
+17.35
+18.07
+
+MPE
+10.29
+11.07
+9.87
+10.96
+
+CORR
+0.3177
+0.2341
+0.3232
+0.1753
+
+RMSE
+33.27
+30.95
+34.45
+31.79
+
+MPE
+18.91
+18.51
+18.81
+19.06
+
+CORR
+0.2751
+0.2773
+0.1427
+0.1737
+
+RMSE
+43.16
+44.78
+44.77
+46.66
+
+MPE
+25.22
+27.12
+26.18
+28.04
+
+CORR
+0.2859
+0.1859
+0.1374
+0.1231
+
+Table 4: Comparison of the forecasting results obtained with the MSG, ICUMM and mean-variance
+models. The percentages of 1- and 2-stdev bands that capture the true BG measurements with the
+MSG model is substantially higher than the ICUMM whereas they are smaller than mean-variance
+model. On the other hand, RMSE and MPE values are closer when comparing all three models, yet
+the MSG model still provides smaller values for these measures, as well. In addition, the forecasted BG
+levels by MSG model gives the highest correlation with the BG measurements for all three patients.
+fit the data, and not inherent to the model itself. On the other hand, these 2-stdev bands contain
+only slightly larger number of BG measurements with mean-variance model compared to MSG model.
+Even though mean-variance model provides better results with respect to this evaluation metric, it
+gives larger RMSE and MPE and much smaller correlation between the BG measurements. Besides,
+the mean-variance model does not provide any physiological understanding of the system.
+In summary, a comprehensive comparison of MSG model with a more complex physiology-based
+mechanistic model and a simpler data-driven model suggests that the MSG model, a mechanistic
+model with small number of parameters, works at least as good as, if not better than, these models in
+representing BG behavior and forecasting future BG levels in the ICU setting.
+
+4
+
+Discussion and Conclusion
+
+Summary of the modeling framework: In this paper, we introduce a new mathematical model
+of the glucose regulatory system in humans. The model was created with five goals in mind: (i) the
+model should be robustly identifiable/estimable and verifiable with real world human data [105]—data
+collected for health management—such that the model could potentially be useful for personalized
+parameter estimation and state forecasting [105]; (ii) the model should be interpretable in the sense
+that patient specific parameters may be used to explain, and quantify basic physiological mechanisms;
+(iii) the model should be physiologically simple, even if the model is functionally complex, to minimize
+parameter identifiability problems present in many existing physiological models; (iv) a model framework
+31
+
+generalizable and adaptable to several contexts including T2DM and ICU; and (v) a model that was
+amenable to a model-based control environment. With these goals driving the model development, our
+model follows different approach, as explained in Section 2.2 compared to many other glucose-insulin
+modeling efforts. The most important departure of our model compared with others is the inclusion
+of insulin as a lumped parameter affecting the glucose state rather than as an independent state or
+state(s). We formulated the model this way because, in clinical settings, insulin is rarely measured,
+and therefore difficult to estimate.
+Model development constrained by real world data: Restricting model development to the
+constraints imposed by readily available real world data is a severe, but important, restriction. To
+be directly useful in applications, models must be estimable using data that are collected within
+the context of the given application, and these data are almost always much more sparse than ideal
+laboratory experiments. To circumnavigate these problems, we are forced to use data collected to
+manage health and the models that can be applied with these data will likely be different than models
+built to be estimable with, e.g., laboratory data. Therefore, to help facilitate the circular process of
+allowing our knowledge of systems physiology to inform and impact how clinicians manage the health
+of people, we need a bridge between these worlds, and the bridge proposed here is through inference
+with data based on simple yet interpretable models.
+Including insulin in a mechanistic modeling framework: There are, at a high level, two
+pathways for estimating and modeling blood glucose behavior. First, one can include dynamic equations
+for glucose and insulin, along with other related processes. Second, one can include a dynamic equation
+for glucose that includes a parameterized function capturing the impact of insulin on glucose that is
+not dynamic. The second option excludes a model equation for insulin and instead has a parameterized
+function that represents the impact of glucose on insulin that is hypothesized to exist. The most
+common tactic is the first approach. However, as we emphasized before, insulin measurements rarely
+exist in any practical setting and insulin levels are not interpretable or meaningful for patients or for
+most clinicians. This implies that modeling glucose together with insulin leaves one of two primary
+variables free to vary, causing the system to be ill-posed and not identifiable. In contrast, the second
+option does not have these pathologies, will be uniquely estimable under most circumstances, and will
+provide a more stable forecast.
+Blood glucose variability and its effect on uncertainty quantification: Both in T2DM and
+ICU settings, we obtain the forecasted mean and 2-stdev bands around this mean as our model output.
+The characteristics of BG behavior, in particular BG variability, affect the width of the 2-stdev bands in
+these two settings. It is natural to expect to have wider bands in the ICU setting because of the highly
+non-stationary BG behavior of ICU patients. However, there are other factors affecting the width of
+these bands. First, BG measurements are relatively dense in the ICU, compared to T2DM. The second
+factor is the difference between the experiments that were designed according to the specific needs of
+each setting, which is depicted in Fig 1 and 2. Using the latest 24-hour data for model estimation
+and forecasting in the ICU setting could help reduce uncertainty in the forecasts and may result in
+occasional more narrow 2-stdev bands. In addition, the GM is performed by clinicians in ICU and
+by patients in the T2DM setting. A clinician’s management is likely to reduce the variability in BG
+behavior, which can be reflected in the width of the estimated 2-stdev bands.
+
+32
+
+Impact of the nutrition function choice in the ICU context: We also considered a different
+form for the nutrition function in the ICU setting to test robustness of our modeling to the simplistic
+piecewise constant meal function that we adopt in this case. Because ICU patients are tube-fed with
+nutrition quantities that are considerably less than a healthy individual would ingest, per unit time,
+it is reasonable to consider the use of a piecewise constant function. Nonetheless we investigated if
+modifying the piecewise constant function as shown in Fig 8 could improve the parameter estimation
+and/or forecasting results. Using this function introduces two more parameters to be estimated in the
+ICU setting, increasing the flexibility and the complexity at the same time. Hence the parameters to
+be estimated are Gb , γ, σ, β, a, b. Using this function modeling the nutrition delivery did not improve
+the forecast accuracy which lead us to use the simpler version of the model.
+
+Figure 8: Smoothing piecewise constant nutrition function that is used for ICU patients
+The function shown on the right hand side of Fig 8 is formulated as follows:
+
+m(t) =
+
+Km
+X
+
+k=1
+
+(m)
+
+ck ((1 − e−a(t−tk
+
+(m)
+−ahk
+
++ (1 − e
+(m)
+
+where hk
+
+(m+1)
+
+:= tk
+
+(m)
+
+− tk
+
+)
+
+)1[t(m) ,t(m) ) (t)
+k
+
+)(2 − e
+
+k+1
+
+(m+1)
+b(t−tk
+)
+
+(24)
+)1[t(m+1) ,t(m) + ln(2) ] (t)),
+k
+
+k+1
+
+b
+
+and
+(m)
+
+ck :=
+
+dk hk
+(m)
+
+hk
+
+(m)
+
+(m)
+
++ (e−ahk /a) + (1 − e−ahk )((2ln(2) − 1)/b)
+
+,
+
+is the normalizing constant for k = 1, 2, ..., Km .
+Outlook: The model we have developed has demonstrable predictive capability and discriminates
+between datasets in a patient-specific manner. Yet it has some limitations, which give space for future
+development, and also suggests some natural next-step applications. We outline a number of possible
+future directions.
+Glycemic control: Given the MSG model construction, an obvious next step is to formulate the
+work on the control problem where we determine estimates of the input ranges of nutrition and insulin,
+necessary to keep the output, here BG, in a desired target range.
+Phenotyping: Because the parameters of the MSG model are interpretable and track physiology
+reasonable well, we could potentially use the model parameter estimates for phenotyping studies, [20,
+
+33
+
+22, 81]. Meaning, we could estimate parameter for individuals in a given health state, establishing an
+inferred phenotype for the patient, and then relate this phenotype to other external health features
+or cluster the patient phenotypes in an effort to find structure among the inferred physiology. We
+have deemed efforts such as this high-fidelity phenotyping [97] and believe that this model has the
+potential to be used to these ends. For example, one of the clinical criteria to diagnose diabetes is
+fasting blood glucose levels higher than 126 mg/dl, where fasting is defined as no caloric intake at
+least eight hours. We intend to understand the relationship between the fasting blood glucose level
+and our model parameter, Gb , the basal glucose value. The existence of such relationship could show
+us if Gb is useful to identify diabetes.
+Further model generalization to include other glucose-data driven situations: We have not investigated
+how the MSG model might work given oral glucose tolerance test (OGTT) data. The OGTT is one of
+the standard settings for glucose-insulin model development and potential use; we know of only one
+model that currently generalized to both OGTT and clinical data [10] and we would like to add the
+MSG model to this list.
+T1DM: We have an initial version of the MSG model that could be used within T1DM setting. It
+would be interest to test this version on T1DM data. Since the time-scales of health progression here
+are more similar to those of T2DM than the ICU setting, giving hope that the method might have
+similar predictive capability in this setting. While MSG model may not outperform current T1DM
+ODE models for short-term glucose forecasting or control, it may useful for performing larger-scale,
+longitudinal patient phenotyping. Because of not having access to such a T1DM dataset, we have
+not been able to work with this version in this paper. We plan to pursue a number of the research
+directions outlined here in the immediate future.
+
+References
+[1] Gerold M Grodsky. “A threshold distribution hypothesis for packet storage of insulin and its
+mathematical modeling”. In: The Journal of clinical investigation 51.8 (1972), pp. 2047–2059.
+[2] Richard N Bergman et al. “Quantitative estimation of insulin sensitivity.” In: American Journal
+of Physiology-Endocrinology And Metabolism 236.6 (1979), E667.
+[3] Jiaxu Li et al. “The range of time delay and the global stability of the equilibrium for an
+IVGTT model”. In: Mathematical biosciences 235.2 (2012), pp. 128–137.
+[4] Xiangyun Shi et al. “Analysis of a stochastic IVGTT glucose-insulin model with time delay”.
+In: Mathematical Biosciences and Engineering 17.3 (2020), pp. 2310–2329.
+[5] Jeppe Sturis et al. “Computer model for mechanisms underlying ultradian oscillations of insulin
+and glucose”. In: American Journal of Physiology-Endocrinology And Metabolism 260.5 (1991),
+E801–E809.
+[6] Jiaxu Li and Yang Kuang. “Analysis of a model of the glucose-insulin regulatory system with
+two delays”. In: SIAM Journal on Applied Mathematics 67.3 (2007), pp. 757–776.
+[7] Weijiu Liu, ChingChun Hsin, and Fusheng Tang. “A molecular mathematical model of glucose
+mobilization and uptake”. In: Mathematical biosciences 221.2 (2009), pp. 121–129.
+34
+
+[8] Brian Topp et al. “A model of β-cell mass, insulin, and glucose kinetics: pathways to diabetes”.
+In: Journal of theoretical biology 206.4 (2000), pp. 605–619.
+[9] Alessandro Bertuzzi, Serenella Salinari, and Geltrude Mingrone. “Insulin granule trafficking
+in b-cells: mathematical model of glucose-induced insulin secretion”. In: American Journal of
+Physiology-Endocrinology and Metabolism (2007).
+[10] Joon Ha, Leslie S Satin, and Arthur S Sherman. “A mathematical model of the pathogenesis,
+prevention, and reversal of type 2 diabetes”. In: Endocrinology 157.2 (2015), pp. 624–635.
+[11] Pranay Goel. “Insulin resistance or hypersecretion? The βIG picture revisited”. In: Journal of
+theoretical biology 384 (2015), pp. 131–139.
+[12] Chiara Dalla Man, Robert A Rizza, and Claudio Cobelli. “Meal simulation model of the glucoseinsulin system”. In: IEEE Transactions on biomedical engineering 54.10 (2007), pp. 1740–
+1749.
+[13] ED Lehmann and T Deutsch. “A physiological model of glucose-insulin interaction in type 1
+diabetes mellitus”. In: Journal of biomedical engineering 14.3 (1992), pp. 235–242.
+[14] David M Eddy and Leonard Schlessinger. “Archimedes: a trial-validated model of diabetes”. In:
+Diabetes care 26.11 (2003), pp. 3093–3101.
+[15] Andrea Mari et al. “Mathematical modeling for the physiological and clinical investigation of
+glucose homeostasis and diabetes”. In: Frontiers in Physiology 11 (2020), p. 1548.
+[16] Steven E Kahn et al. “The contribution of insulin-dependent and insulin-independent glucose
+uptake to intravenous glucose tolerance in healthy human subjects”. In: Diabetes 43.4 (1994),
+pp. 587–592.
+[17] George Hripcsak, David J Albers, and Adler Perotte. “Exploiting time in electronic health record
+correlations”. In: Journal of the American Medical Informatics Association 18.Supplement 1
+(2011), pp. i109–i115.
+[18] D. J. Albers and G. Hripcsak. “Using time-delayed mutual information to discover and interpret
+temporal correlation structure in complex populations”. In: CHAOS 22 (2012), p. 013111.
+[19] David J Albers and George Hripcsak. “Estimation of time-delayed mutual information and bias
+for irregularly and sparsely sampled time-series”. In: Chaos, Solitons & Fractals 45.6 (2012),
+pp. 853–860.
+[20] David J Albers, George Hripcsak, and Michael Schmidt. “Population physiology: leveraging
+electronic health record data to understand human endocrine dynamics”. In: PLoS One 7.12
+(2012), e48058.
+[21] George Hripcsak and David J Albers. “Correlating electronic health record concepts with
+healthcare process events”. In: Journal of the American Medical Informatics Association 20.e2
+(2013), e311–e318.
+[22] David J Albers et al. “Dynamical phenotyping: using temporal analysis of clinically collected
+physiologic data to stratify populations”. In: PloS one 9.6 (2014), e96443.
+
+35
+
+[23] Bum Ju Lee and Jong Yeol Kim. “Identification of type 2 diabetes risk factors using phenotypes
+consisting of anthropometry and triglycerides based on machine learning”. In: IEEE journal of
+biomedical and health informatics 20.1 (2015), pp. 39–46.
+[24] Gang Luo. “Automatically explaining machine learning prediction results: a demonstration on
+type 2 diabetes risk prediction”. In: Health information science and systems 4.1 (2016), pp. 1–9.
+[25] Brett Kreigh Beaulieu-Jones. “Machine Learning Methods to Identify Hidden Phenotypes in
+the Electronic Health Record”. PhD thesis. University of Pennsylvania, 2017.
+[26] Hasan T Abbas et al. “Predicting long-term type 2 diabetes with support vector machine using
+oral glucose tolerance test”. In: Plos one 14.12 (2019), e0219636.
+[27] Leila Ismail et al. “Type 2 diabetes with artificial intelligence machine learning: methods and
+evaluation”. In: Archives of Computational Methods in Engineering 29.1 (2022), pp. 313–333.
+[28] Madineh Sedigh-Sarvestani, David J Albers, and Bruce J Gluckman. “Data assimilation of
+glucose dynamics for use in the intensive care unit”. In: 2012 Annual International Conference
+of the IEEE Engineering in Medicine and Biology Society. IEEE. 2012, pp. 5437–5440.
+[29] Tom Van Herpe et al. “A minimal model for glycemia control in critically ill patients”. In: 2006
+International Conference of the IEEE Engineering in Medicine and Biology Society. IEEE. 2006,
+pp. 5432–5435.
+[30] J Lin et al. “Adaptive bolus-based set-point regulation of hyperglycemia in critical care”. In:
+The 26th Annual International Conference of the IEEE Engineering in Medicine and Biology
+Society. Vol. 2. IEEE. 2004, pp. 3463–3466.
+[31] Jessica Lin et al. “A physiological Intensive Control Insulin-Nutrition-Glucose (ICING) model
+validated in critically ill patients”. In: Computer methods and programs in biomedicine 102.2
+(2011), pp. 192–205.
+[32] Ari Pritchard-Bell et al. “Modeling glucose and subcutaneous insulin dynamics in critical care”.
+In: Control Engineering Practice 58 (2017), pp. 268–275.
+[33] Timothy D Knab, Gilles Clermont, and Robert S Parker. “A “Virtual Patient” Cohort and
+Mathematical Model of Glucose Dynamics in Critical Care”. In: IFAC-PapersOnLine 49.26
+(2016), pp. 1–7.
+[34] Anirban Roy and Robert S Parker. “A phenomenological model of plasma FFA, glucose, and
+insulin concentrations during rest and exercise”. In: Proceedings of the 2010 American Control
+Conference. IEEE. 2010, pp. 5161–5166.
+[35] Timothy D Knab, Gilles Clermont, and Robert S Parker. “Zone model predictive control and
+moving horizon estimation for the regulation of blood glucose in critical care patients”. In:
+IFAC-PapersOnLine 48.8 (2015), pp. 1002–1007.
+[36] Michael Vilkhovoy et al. “A control-relevant model of subcutaneous insulin absorption”. In:
+IFAC Proceedings Volumes 47.3 (2014), pp. 10988–10993.
+
+36
+
+[37] Niels Haverbeke et al. “Nonlinear model predictive control with moving horizon state and
+disturbance estimation-application to the normalization of blood glucose in the critically ill”.
+In: IFAC Proceedings Volumes 41.2 (2008), pp. 9069–9074.
+[38] Robert S Parker, Timothy D Knab, and Gilles Clermont. “The Impact of a Responsive Endogenous Pancreas in Critical Care Glucose Control”. In: 2018 Annual American Control Conference
+(ACC). IEEE. 2018, pp. 3595–3601.
+[39] Yan Zhang, Tim A Holt, and Natalia Khovanova. “A data driven nonlinear stochastic model
+for blood glucose dynamics”. In: Computer methods and programs in biomedicine 125 (2016),
+pp. 18–25.
+[40] Shaun Davidson et al. “Multi-input stochastic prediction of insulin sensitivity for tight glycaemic
+control using insulin sensitivity and blood glucose data”. In: Computer methods and programs
+in biomedicine 182 (2019), p. 105043.
+[41] Jessica Lin et al. “Stochastic modelling of insulin sensitivity and adaptive glycemic control for
+critical care”. In: Computer methods and programs in biomedicine 89.2 (2008), pp. 141–152.
+[42] Jessica Lin et al. “Stochastic modelling of insulin sensitivity variability in critical care”. In:
+Biomedical Signal Processing and Control 1.3 (2006), pp. 229–242.
+[43] Aaron J Le Compte et al. “Blood glucose prediction using stochastic modeling in neonatal
+intensive care”. In: IEEE Transactions on Biomedical Engineering 57.3 (2009), pp. 509–518.
+[44] Shaun M Davidson et al. “Virtual patient trials of a multi-input stochastic model for tight
+glycaemic control using insulin sensitivity and blood glucose data”. In: Biomedical Signal
+Processing and Control 59 (2020), p. 101896.
+[45] Anne Katrine Duun-Henriksen et al. “Model identification using stochastic differential equation
+grey-box models in diabetes”. In: Journal of diabetes science and technology 7.2 (2013), pp. 431–
+440.
+[46] Paolo Brunetti, Marco Orsini Federici, and Massimo Massi Benedetti. “The Artificial Pancreas”.
+In: Artificial Cells, Blood Substitutes, and Biotechnology 31.2 (2003), pp. 127–138. doi: 10.
+1081 / BIO - 120020169. eprint: https : / / doi . org / 10 . 1081 / BIO - 120020169. url: https :
+//doi.org/10.1081/BIO-120020169.
+[47] Robert S Parker, Francis J Doyle, and Nicholas A Peppas. “The intravenous route to blood
+glucose control”. In: IEEE Engineering in Medicine and Biology Magazine 20.1 (2001), pp. 65–
+73.
+[48] Claudio Cobelli and Alfredo Ruggeri. “Evaluation of portal/peripheral route and of algorithms
+for insulin delivery in the closed-loop control of glucose in diabetes-A modeling study”. In:
+IEEE Transactions on Biomedical Engineering 2 (1983), pp. 93–103.
+[49] Pier Giorgio Fabietti et al. “Clinical validation of a new control-oriented model of insulin and
+glucose dynamics in subjects with type 1 diabetes”. In: Diabetes Technology & Therapeutics 9.4
+(2007), pp. 327–338.
+[50] Pier Giorgio Fabietti et al. “Control oriented model of insulin and glucose dynamics in type 1
+diabetics”. In: Medical and Biological Engineering and Computing 44.1-2 (2006), pp. 69–78.
+37
+
+[51] Boris P Kovatchev et al. In silico preclinical trials: a proof of concept in closed-loop control of
+type 1 diabetes. 2009.
+[52] Robert S Parker et al. “Robust H∞ glucose control in diabetes using a physiological model”. In:
+AIChE Journal 46.12 (2000), pp. 2537–2549.
+
+[53] Frederick Chee and Tyrone Fernando. Closed-loop control of blood glucose. Vol. 368. Springer,
+2007.
+[54] Pierre-Yves Benhamou et al. “Closed-loop insulin delivery in adults with type 1 diabetes in
+real-life conditions: a 12-week multicentre, open-label randomised controlled crossover trial”. In:
+The Lancet Digital Health 1.1 (2019), e17–e25.
+[55] Sue A Brown et al. “Six-month randomized, multicenter trial of closed-loop control in type 1
+diabetes”. In: New England Journal of Medicine 381.18 (2019), pp. 1707–1717.
+[56] Daniela Bruttomesso. “Toward automated insulin delivery”. In: N Engl J Med 381.18 (2019),
+pp. 1774–1775.
+[57] Martin Tauschmann et al. “Closed-loop insulin delivery in suboptimally controlled type 1
+diabetes: a multicentre, 12-week randomised trial”. In: The Lancet 392.10155 (2018), pp. 1321–
+1329.
+[58] Hood Thabit et al. “Home use of an artificial beta cell in type 1 diabetes”. In: New England
+Journal of Medicine 373.22 (2015), pp. 2129–2140.
+[59] Bharath Sudharsan, Malinda Peeples, and Mansur Shomali. “Hypoglycemia prediction using
+machine learning models for patients with type 2 diabetes”. In: Journal of diabetes science and
+technology 9.1 (2014), pp. 86–90.
+[60] Glen H Murata et al. “A probabilistic model for predicting hypoglycemia in type 2 diabetes
+mellitus: The Diabetes Outcomes in Veterans Study (DOVES)”. In: Archives of internal medicine
+164.13 (2004), pp. 1445–1450.
+[61] Bryan S Gibson et al. “Development and validation of a predictive model of acute glucose
+response to exercise in individuals with type 2 diabetes”. In: Diabetology & metabolic syndrome
+5.1 (2013), p. 33.
+[62] David Zeevi et al. “Personalized nutrition by prediction of glycemic responses”. In: Cell 163.5
+(2015), pp. 1079–1094.
+[63] Lucas P Beverlin et al. “An algorithm for optimally fitting a Wiener model”. In: Mathematical
+problems in Engineering 2011 (2011).
+[64] Derrick K Rollins et al. “Free-living inferential modeling of blood glucose level using only
+noninvasive inputs”. In: Journal of process control 20.1 (2010), pp. 95–107.
+[65] Raed Abu Zitar and Abdulkareem Al-Jabali. “Towards neural network model for insulin/glucose
+in diabetics-II”. In: Informatica 29.2 (2005).
+[66] Barbara Martinovic et al. “Modelling the glucose-insulin system of type 2 diabetes patients
+using ARMAX models”. In: 2019 Australian & New Zealand Control Conference (ANZCC).
+IEEE. 2019, pp. 88–93.
+38
+
+[67] Jun Yang et al. “An ARIMA model with adaptive orders for predicting blood glucose concentrations and hypoglycemia”. In: IEEE journal of biomedical and health informatics 23.3 (2018),
+pp. 1251–1260.
+[68] Eslam Montaser, José-Luis Dı́ez, and Jorge Bondia. “Stochastic seasonal models for glucose
+prediction in the artificial pancreas”. In: Journal of diabetes science and technology 11.6 (2017),
+pp. 1124–1131.
+[69]
+
+Jaques Reifman et al. “Predictive monitoring for improved management of glucose levels”. In:
+Journal of diabetes science and technology 1.4 (2007), pp. 478–486.
+
+[70] Troy Bremer and David A Gough. “Is blood glucose predictable from previous values? A
+solicitation for data.” In: Diabetes 48.3 (1999), pp. 445–451.
+[71] Adiwinata Gani et al. “Predicting subcutaneous glucose concentration in humans: data-driven
+glucose modeling”. In: IEEE Transactions on Biomedical Engineering 56.2 (2009), pp. 246–254.
+[72] Giovanni Sparacino et al. “Glucose concentration can be predicted ahead in time from continuous
+glucose monitoring sensor time-series”. In: IEEE Transactions on biomedical engineering 54.5
+(2007), pp. 931–937.
+[73] Zhongheng Zhang. “A mathematical model for predicting glucose levels in critically-ill patients:
+the PIGnOLI model”. In: PeerJ 3 (2015), e1005.
+[74] Andrew C Miller, Nicholas J Foti, and Emily Fox. “Learning Insulin-Glucose Dynamics in the
+Wild”. In: Machine Learning for Healthcare Conference. PMLR. 2020, pp. 172–197.
+[75] Kerri Cavanaugh et al. “Association of numeracy and diabetes control”. In: Annals of internal
+medicine 148.10 (2008), pp. 737–746.
+[76] Bryan Gibson et al. “Efficacy of a computerized simulation in promoting walking in individuals
+with diabetes”. In: Journal of medical Internet research 14.3 (2012), e1965.
+[77] Lena Mamykina et al. “Data-driven health management: reasoning about personally generated
+data in diabetes with information technologies”. In: Journal of the American Medical Informatics
+Association 23.3 (Mar. 2016), pp. 526–531. issn: 1527-974X. doi: 10.1093/jamia/ocv187.
+eprint: http://oup.prod.sis.lan/jamia/article-pdf/23/3/526/9515671/ocv187.pdf.
+url: https://doi.org/10.1093/jamia/ocv187.
+[78] Lena Mamykina et al. “From personal informatics to personal analytics: Investigating how
+clinicians and patients reason about personal data generated with self-monitoring in diabetes”.
+In: Cognitive Informatics in Health and Biomedicine. Springer, 2017, pp. 301–313.
+[79] Pooja M Desai et al. “Personal Health Oracle: Explorations of Personalized Predictions in
+Diabetes Self-Management”. In: Proceedings of the 2019 CHI Conference on Human Factors in
+Computing Systems. ACM. 2019, p. 370.
+[80] Pooja M Desai et al. “Pictures worth a thousand words: Reflections on visualizing personal
+blood glucose forecasts for individuals with type 2 diabetes”. In: Proceedings of the 2018 CHI
+Conference on Human Factors in Computing Systems. ACM. 2018, p. 538.
+
+39
+
+[81] David J Albers et al. “Mechanistic machine learning: how data assimilation leverages physiologic
+knowledge using Bayesian inference to forecast the future, infer the present, and phenotype”. In:
+Journal of the American Medical Informatics Association 25.10 (Oct. 2018), pp. 1392–1401. issn:
+1527-974X. doi: 10.1093/jamia/ocy106. eprint: http://oup.prod.sis.lan/jamia/articlepdf/25/10/1392/26051069/ocy106.pdf. url: https://doi.org/10.1093/jamia/ocy106.
+[82] Elaine Lum et al. “Decision support and alerts of apps for self-management of blood glucose for
+type 2 diabetes”. In: Jama 321.15 (2019), pp. 1530–1532.
+[83] Dietmar Glachs et al. “A Predictive Model-Based Decision Support System for Diabetes Patient
+Empowerment”. In: Public Health and Informatics. IOS Press, 2021, pp. 963–968.
+[84] Elliot G Mitchell et al. “Enabling personalized decision support with patient-generated data
+and attributable components”. In: Journal of Biomedical Informatics 113 (2021), p. 103639.
+[85] Heinz Werner Engl, Martin Hanke, and Andreas Neubauer. Regularization of inverse problems.
+Vol. 375. Springer Science & Business Media, 1996.
+[86] Jari Kaipio and Erkki Somersalo. Statistical and computational inverse problems. Vol. 160.
+Springer Science & Business Media, 2006.
+[87] Sha Wu and Eiko Furutani. “Nonlinear model predictive glycemic control of critically ill patients
+using online identification of insulin sensitivity”. In: 2016 38th Annual International Conference
+of the IEEE Engineering in Medicine and Biology Society (EMBC). IEEE. 2016, pp. 2245–2248.
+[88] Tom Van Herpe et al. “Glycemia Prediction in Critically Ill Patients Using an Adaptive
+Modeling Approach”. In: Journal of Diabetes Science and Technology 1.3 (2007). PMID:
+19885089, pp. 348–356. doi: 10 . 1177 / 193229680700100306. url: https : / / doi . org / 10 .
+1177/193229680700100306.
+[89] Roman Hovorka et al. “A simulation model of glucose regulation in the critically ill”. In:
+Physiological measurement 29.8 (2008), p. 959.
+[90] George Hripcsak and David J Albers. “Evaluating Prediction of Continuous Clinical Values: A
+Glucose Case Study”. In: Methods of Information in Medicine (2022).
+[91] Bernt Oksendal. Stochastic differential equations: an introduction with applications. Springer
+Science & Business Media, 2013.
+[92] David J Albers et al. “Personalized glucose forecasting for type 2 diabetes using data assimilation”. In: PLoS computational biology 13.4 (2017), e1005232.
+[93] Andrew M Stuart. “Inverse problems: a Bayesian perspective”. In: Acta numerica 19 (2010),
+pp. 451–559.
+[94] Joon Ha and Arthur Sherman. “Type 2 diabetes: one disease, many pathways”. In: American
+Journal of Physiology-Endocrinology and Metabolism 319.2 (2020), E410–E426.
+[95] David J Albers et al. “Estimating summary statistics for electronic health record laboratory
+data for use in high-throughput phenotyping algorithms”. In: Journal of biomedical informatics
+78 (2018), pp. 87–101.
+
+40
+
+[96] DJ Albers and George Hripcsak. “A statistical dynamics approach to the study of human health
+data: resolving population scale diurnal variation in laboratory data”. In: Physics letters A
+374.9 (2010), pp. 1159–1164.
+[97] George Hripcsak and David J Albers. “High-fidelity phenotyping: richness and freedom from
+bias”. In: Journal of the American Medical Informatics Association 25.3 (2017), pp. 289–294.
+[98] George Hripcsak and David J Albers. “Next-generation phenotyping of electronic health records”.
+In: Journal of the American Medical Informatics Association 20.1 (2012), pp. 117–121.
+[99] Matthew E Levine, David J Albers, and George Hripcsak. “Methodological variations in
+lagged regression for detecting physiologic drug effects in EHR data”. In: Journal of biomedical
+informatics 86 (2018), pp. 149–159.
+[100] Rimma Pivovarov et al. “Identifying and mitigating biases in EHR laboratory tests”. In: Journal
+of biomedical informatics 51 (2014), pp. 24–34.
+[101] Gilbert A Churchill Jr. “A paradigm for developing better measures of marketing constructs”.
+In: Journal of marketing research 16.1 (1979), pp. 64–73.
+[102] David M Hardesty and William O Bearden. “The use of expert judges in scale development:
+Implications for improving face validity of measures of unobservable constructs”. In: Journal of
+Business Research 57.2 (2004), pp. 98–107.
+[103] Irving B Weiner and W Edward Craighead. The Corsini encyclopedia of psychology. Vol. 4.
+John Wiley & Sons, 2010.
+[104] David J Albers et al. “Ensemble Kalman methods with constraints”. In: Inverse Problems 35.9
+(2019), p. 095007.
+[105] Rachel E Sherman et al. “Real-world evidence—what is it and what can it tell us”. In: N Engl
+J Med 375.23 (2016), pp. 2293–2297.
+
+41
+
+Supplementary Material
+Optimization
+In solving the parameter estimation problem with the optimization approach, our goal here is to
+determine parameter values, θ, which maximize the posterior distribution, P(θ|y) and is called to
+
+arXiv:1910.14193v3 [q-bio.QM] 21 Sep 2022
+
+be the maximum a posteriori (MAP) estimator. Using the prior distribution as specified above, the
+parameter estimation problem becomes
+θ∗ = arg max P(θ|y) = arg max P(y|θ) = arg min − log(P(θ|y)).
+θ
+
+θ∈Θ
+
+(1)
+
+θ∈Θ
+
+Remember that for the parameter estimation problem with the Minimal Stochastic Glucose model, we
+have
+− log(P(θ|y)) =
+
+Km
+1
+1
+log(2π) + log(det(S(θ))) + (y − Lm(θ))T S(θ)−1 (y − Lm(θ)).
+2
+2
+2
+
+(2)
+
+Then, substituting (2) into (1), the problem will take the form
+θ∗ = arg min ||S(θ)−1/2 (y − Lm(θ))||2 + log(det(S(θ))).
+
+(3)
+
+θ∈Θ
+
+Hence, placing uniform prior distribution turns the problem of finding the MAP estimator into a
+constrained optimization problem. To solve this problem, we use built-in MATLAB functions, such as
+fmincon and multistart. fmincon is a gradient-based minimization algorithm for nonlinear functions.
+multistart starts the optimization procedure from the indicated number of starting points that
+are picked uniformly over the region defined by the constraints. It uses fmincon and other similar
+algorithms to perform each optimization process independently and provides the one that achieves the
+minimum value among the results of all separate runs. With this approach, we have the opportunity
+to compare different optimization procedures that start from different initial points. This provides
+some intuitive understanding of the solution surface and hence the estimated optimal parameters.
+Once an optimal point has been found, we may also employ the Laplace approximation [1, 2]
+to obtain a Gaussian approximation to the posterior distribution. The Laplace approximation is a
+reasonable approximation in many data rich scenarios in which all parameters are identifiable from the
+data, because of the Bernstein Von Mises Theorem [3], which asserts that the posterior distribution
+will then be approximately Gaussian, centered near the truth and with variance which shrinks to zero
+as more and more data is acquired. However data is not always abundant, and not all parameters are
+identifiable even if it is; in this setting sampling the posterior distribution is desirable, and for this
+purpose, we use Markov Chain Monte Carlo (MCMC) techniques.
+
+Markov Chain Monte Carlo
+MCMC methods are a flexible set of techniques which may be used to sample from a target distribution,
+which is not necessarily analytically tractable, [4, 5]. For example, the distribution P(θ|y) is the
+conditional distribution of the random model parameters, θ given the data, y. Even though we can
+
+1
+
+explicitly formulate it using the Bayes’ Theorem, it is not always an easy task to extract useful
+quantities, such as posterior mean and variance, from that formula. In such cases, MCMC techniques
+are used to generate random samples from this target distribution and this random sample is used to
+obtain the desired information, which could be anything such as the mean, mode, covariance matrix, or
+higher moments of the parameters. Moreover, this technique is also very helpful to obtain uncertainty
+quantification (UQ) results for the estimated parameters.
+In order to obtain more extensive knowledge than MAP estimator can provide about the posterior
+distribution of parameters given the data, θ|y, we use MCMC methods as a natural choice to sample
+from that distribution. Among different possible algorithms (see [6]), we use the standard random
+walk Metropolis-Hastings algorithm. In order to make sure the resulting sample is indeed a good
+representer of the posterior distribution, we perform some diagnostics such as checking if chains for
+each parameter converged and if they are uncorrelated. Then, after removing the burn-in period, we
+compute the mean and the covariance matrix from the remaining part of the sample. We use the
+mean as a point estimator for simulation and forecasting, and the covariance matrix provides valuable
+information to quantify uncertainty for the estimated parameters.
+In general, it is hard to obtain efficient results with MCMC methods even when sampling from
+the joint distribution of four or five parameters, due to the issues such as parameter identification.
+Moreover, obtaining accurate results with this approach requires careful choice of starting point and
+tuning some other parameters. In general the performance of the algorithm will depend on the initial
+point. We tested the use of both random starting points and MAP estimators as starting point. The
+former enables us to detect when several modes are present in the posterior distribution; the latter
+helps to focus sampling near to the most likely parameter estimate and to quantify uncertainty in it.
+However, it is also important to note that using MAP estimator as a starting point is not helpful in
+all cases. More precisely, if the MAP estimator is not a global minimum but a local minimum, then
+the chain could get stuck around this point. Therefore, it requires careful analysis, comparison and
+synthesis of the results obtained with these different approaches.
+
+Insight About the MSG Model’s Ability to Capture ICU Dynamics
+We explain here how the model captures the BG dynamics in the ICU setting. Consider Fig 1,
+which demonstrates both the model’s relative robustness and its capability of capturing the dynamics
+and various complexities encountered in different conditions in the ICU setting. These figures show
+simulated BG values for patient 4 over different training time windows for which the parameters are
+estimated with the optimization approach. Here the the red curves represent the mean of the BG
+dynamics that are assumed to be oscillatory, the amplitude of oscillations are expected to lie in the gray
+region as it is the 2-stdev band around the mean. The red circles show the BG measurements the light
+blue curve shows the tube-nutrition input rate. For simplicity we consider patient 4 who did not need
+any exogenous insulin, so the tube-feed nutrition is the only driver of the BG level. Each subfigure of
+Fig 1 shows a different training time window that is representative of different circumstances relative
+to our ability to estimate Gb , γ, and σ.
+Fig 1a shows a situation where the BG measurements (the output of the system) reflect the nutrition
+rate (the input to the system) quite well. As the nutrition rate, the only driver of the system included
+2
+
+(a) Gb =106.49,
+γ=0.07, σ=12.34
+
+(b) Gb =131.40,
+γ=0.49, σ=13.33
+
+(c) Gb =139.12,
+γ=0.50, σ=17.61
+
+Figure 1: BG simulations are shown with respective to the estimated parameters over respective
+training time window. In each plot, the light blue curve is the glucose rate in the nutrition delivered to
+the patient (right y-axis), the red circles show the true BG measurements (left y-axis), the red curve is
+the mean of the model output (left y-axis), and the gray area is the 2-stdev band around the mean
+of the model output (left y-axis). These figures show two main cases that could arise as a result of
+parameter estimation in the ICU setting: (a): the input (nutrition rate) is reflected in the output (BG
+measurements), (b) and (c): the input is not reflected in the output, which makes it impossible to
+estimate the decay rate γ accurately.
+in the model, the BG measurements increases, which is reflected in the mean of the model output.
+In contrast, Fig 1b and 1c demonstrate a situation where the BG measurements do not reflect the
+nutrition rate over the shown time window. In Fig 1b, we see that there is no change in the nutrition
+rate over the whole time window, which is clearly reflected by the mean of the model output. However,
+having no change in the nutrition rate means that there is no opportunity to “learn” the glycemic
+decay parameter, γ. Therefore, in the absence of any information, optimization algorithm provides the
+possible largest value to reflect non-changing nutrition rate in the mean of the model output, which
+also around the mean of all the BG measurements in the respective training time window.
+On the other hand, the situation in Fig 1c occurs when the changes in the BG measurement are
+uncorrelated with the changes in the nutrition rate, potentially due to changes in health states or
+other interventions, e.g., other hormone drips. Hence it is impossible for the model parameters to
+accurately reflect the physiology as they are accounting for dynamical glucose features that they were
+not designed to accommodate. Observe from Fig 1c that, with a γ value as in Fig 1a, there should
+be a substantial decrease in the mean of the model output due to the decrease in the nutrition rate.
+Since this is not the case as seen by the BG measurements, the optimization algorithm provides a
+reasonable mean model output (characterized by Gb ) and set the decay rate as high as possible (here
+the upper bound for this parameter) so that it could keep the mean model output constant over the
+whole interval accommodating for the two widely different nutrition rate regimes.
+These issues do not mean the model cannot represent and forecast the glycemic dynamics, it still is
+usually able to represent glycemic dynamics, but some of the parameters might lose their intended
+meaning. For example, in the two respective examples, despite parameter estimate issues, in both of
+these cases the estimated Gb , and σ values are enough to capture the mean and variance of the BG
+measurements accurately. These examples are not the only cases where we observe parameter estimates
+that are not physiologically valid while at the same time the glucose forecast and modeling itself
+3
+
+remains accurate. The other examples are all variations of the same theme; we either do not have the
+available data to estimate a parameter accurately, or the data are behaving in a more complex manner,
+and in both cases, the parameters make up for these data-driven and model-driven short-comings by
+deviating from their normal roles to render a robust glucose forecast. It is likely that problems such as
+these will not be eliminated by using more complex datasets and more complex models, because full
+representation of the relevant processes is out of reach in such non-stationary ICU settings.
+
+Parameter Identifiability Issues in the ICU Setting
+We encountered some parameter identifiability issues while solving the optimization problem stated in
+(3) in the ICU setting, which caused the solution surface, the function we minimize (P(θ|y)), to be
+flat in some parameter directions. Because of this reason, the Hessian matrix becomes ill-conditioned.
+However, the Laplace approximation requires computing the inverse of the Hessian matrix, which gives
+the variance of the estimated unknown model parameters on the diagonal. When we compute the
+inverse of an ill-conditioned Hessian matrix, the resulting matrix has very large entries. Hence the
+variance of the estimated model parameters is also unreasonably large, resulting in non-useful UQ
+results, which can be seen in Fig 2.
+
+The Effect of Blood Glucose Measurement Pattern to Parameter Estimation
+in the T2DM Setting
+We observed that the BG measurement pattern of T2DM patients significantly affects the values of
+estimated model parameters based on this patient-collected data. For each patient, we computed the
+time difference between the meal time and the first BG measurement after that meal time for each
+meal recorded during the training time window. We show the histogram of these time differences for
+each patient in Fig 3. We see that patients 1 and 3 measured their BG levels at varying times after
+meal consumption. However, patient 2 measured precisely after two hours for each meal.
+
+4
+
+(a) Patient 4
+
+(b) Patient 5
+
+(c) Patient 6
+
+Figure 2: The figure shows the UQ bands when we use the optimization approach for parameter
+estimation in the ICU setting. Because of the parameter identifiability issues, the Hessian matrix is-ill
+conditioned. When we compute its inverse to obtain the variance in the estimated model parameters,
+we obtain unreasonably wide UQ bands.
+
+5
+
+(a) Patient 1
+
+(b) Patient 2
+
+(c) Patient 3
+
+Figure 3: Each histogram shows the elapsed time after meal time until the first BG measurement for
+each meal in the training time window. Lack of variability of patient 2 causes suboptimal parameter
+estimation and forecasting results for this patient.
+
+6
+
+References
+[1] David JC MacKay. Information theory, inference and learning algorithms. Cambridge university
+press, 2003.
+[2]
+
+Art B. Owen. Monte Carlo theory, methods and examples. 2013.
+
+[3]
+
+Aad W Van der Vaart. Asymptotic statistics. Vol. 3. Cambridge university press, 2000.
+
+[4] Jun S Liu. Monte Carlo strategies in scientific computing. Springer Science & Business Media,
+2008.
+[5] Christian Robert and George Casella. Monte Carlo statistical methods. Springer Science & Business
+Media, 2013.
+[6]
+
+Andrew Gelman et al. Bayesian data analysis. Chapman and Hall/CRC, 2013.
+
+7
+
+

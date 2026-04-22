@@ -4,8 +4,9 @@
 clear;clc;
 
 % patient 
-pat = fileread('PAT.txt');
-% pat = "SM001";
+settings = jsondecode(fileread("settings.json"));
+pat = settings.pat;
+
 fprintf("%s\n",pat)
 
 % add scripts to path

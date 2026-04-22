@@ -36,5 +36,5 @@ cmd = 'srcmatlab src/lib/T1D_moving_window_smoother_param_summary.m'
 
 for pat in patients:
     print(f"\n\n****** Compiling Param Summary for {pat} ****** ")
-    runPatient(command = cmd, pat = pat)
+    runPatient(command = cmd, settings = {"pat": pat})
         

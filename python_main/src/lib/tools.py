@@ -4,6 +4,8 @@ import os
 from pathlib import Path
 import subprocess as sp
 from typing import Optional, Tuple, Dict, Any
+import json
+from pprint import pprint
 
 def mount_odrive(force = False):
     '''Mount onedrive to home directory if not there.'''
@@ -45,17 +47,17 @@ def timestr_to_mins(string):
     return minutes
 
 
-def setPatient(pat):
+def makeSettings(settings: dict):
     """Write patient to text file for reading in matlab scripts."""
-    with open("./PAT.txt", 'wt', encoding = "UTF+8",) as f:
-        f.write(pat)
-    return pat
+    with open("./settings.json", 'w') as f:
+        json.dump(settings, f)
+    return settings['pat']
     
-def runPatient(command: str,pat: Optional[str]=None):
+def runPatient(command: str,settings: Optional[dict] = None):
     """Run matlab script on patient"""
-    if pat is not None:
-        setPatient(pat)
-    print(open("PAT.txt", 'rt').read())
+    if settings is not None:
+        makeSettings(settings)
+    pprint(json.load(open("settings.json", 'r')))
     frags = command.split(" ")
     path = [x  for x in frags if "/" in x or x.endswith((".m",".py"))][0]
     if not Path(path).exists():

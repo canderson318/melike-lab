@@ -24,7 +24,7 @@ class GlucoseSim:
     Gmeal : array of meal glucose loads at each event time (mg/dl)
     """
 
-    def __init__(self, Gb, sigma, gamma, a_meal, b_meal,beta, a_ins, b_ins, t, Gmeal, Ibolus, x = 5, z = 300):
+    def __init__(self, Gb, sigma, gamma, a_meal, b_meal, beta, a_ins, b_ins, t, Gmeal, Ibolus, Ibasal=None, x=5, z=300):
         self.Gb = Gb
         self.sigma = sigma
         self.gamma = gamma
@@ -33,13 +33,14 @@ class GlucoseSim:
         self.a_ins = a_ins
         self.b_ins = b_ins
         self.beta = beta
-        self.x= x
+        self.x = x
         self.z = z
         self.t = t
         self.Gmeal = Gmeal
         self.Ibolus = Ibolus
+        self.Ibasal = Ibasal  # 1D array len(t): Ibasal[k] = basal rate (U/hr) during [t[k], t[k+1]]
         self.K = len(t)
-        self.results = None  # this is set after calling .run()
+        self.results = None
 
     # @staticmethod
     # def calculate_c(a, b, t, tk_m):
@@ -95,6 +96,16 @@ class GlucoseSim:
         return const * Ij * (term1 - term2)
 
     @staticmethod
+    def basalInsulin(rate_j, t_j, t_j1, gamma, t_k1):
+        """
+        Basal contribution of rate_j (U/hr) over segment [t_j, t_j1] to step ending at t_k1.
+        f(u, v, next_time) = integral of exp(-gamma*(next_time - s)) ds from u to v
+                           = (exp(-gamma*(next_time-v)) - exp(-gamma*(next_time-u))) / gamma  [MATLAB sign convention]
+        """
+        rate = rate_j / 60.0  # U/hr -> U/min
+        return float(rate * (np.exp(-gamma*(t_k1 - t_j1)) - np.exp(-gamma*(t_k1 - t_j))) / gamma)
+    
+    @staticmethod
     def integrate_meal(k, Gmeal, a_meal, b_meal, t, gamma):
         return sum(
             GlucoseSim.meal(Gmeal[j], a_meal, b_meal, t[j], gamma, t[k], t[k+1])
@@ -107,6 +118,16 @@ class GlucoseSim:
             GlucoseSim.bolusInsulin(Ibolus[j], a_ins, b_ins, t[j], gamma, t[k], t[k+1], x, z)
             for j in range(k+1) if Ibolus[j] > 0
         )
+
+    @staticmethod
+    def integrate_basalInsulin(k, Ibasal, t, gamma):
+        """
+        Integrates basal insulin contribution over current interval [t[k], t[k+1]] only.
+        Ibasal[k] = basal rate (U/hr) constant over [t[k], t[k+1]].
+        """
+        if Ibasal is None or Ibasal[k] == 0:
+            return 0.0
+        return GlucoseSim.basalInsulin(Ibasal[k], t[k], t[k+1], gamma, t[k+1])
 
     @staticmethod
     def nextG_raw(Gb, gamma, hk, gk, mk, beta, ik):
@@ -146,7 +167,8 @@ class GlucoseSim:
                 hk = self.t[k+1] - self.t[k]
 
                 mk_integral = GlucoseSim.integrate_meal(k, self.Gmeal, self.a_meal, self.b_meal, self.t, self.gamma)
-                ik_integral = GlucoseSim.integrate_bolusInsulin(k, self.Ibolus, self.a_ins, self.b_ins, self.t, self.gamma, self.x, self.z)
+                ik_integral = (GlucoseSim.integrate_bolusInsulin(k, self.Ibolus, self.a_ins, self.b_ins, self.t, self.gamma, self.x, self.z)
+                               + GlucoseSim.integrate_basalInsulin(k, self.Ibasal, self.t, self.gamma))
 
                 # evolve current glucose as function meal and params
                 G[k+1] = self.nextGk(Gb=self.Gb, hk=hk, gamma=self.gamma, gk=G[k], mk=mk_integral, ik = ik_integral, sigma=self.sigma, beta = self.beta)

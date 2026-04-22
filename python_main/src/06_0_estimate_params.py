@@ -44,7 +44,7 @@ sim = pkl.load(open(local_output_path/"05"/"sim.pkl", 'rb'))
 # \\\\
 # \\\\
 
-def neg_log_likelihood(params, t, G_obs, Gmeal, Ibolus):
+def neg_log_likelihood(params, t, G_obs, Gmeal, Ibolus, I):
     Gb, sigma, gamma, a_meal, log_d_meal, a_ins, log_d_ins, beta = params
     # optimize b as function a
     #++ b_meal = a + np.exp(log_d_meal)
@@ -63,7 +63,7 @@ def neg_log_likelihood(params, t, G_obs, Gmeal, Ibolus):
         # integrate meals up to k
         mk = GlucoseSim.integrate_meal(k,Gmeal, a_meal, b_meal, t, gamma)
         # integrate insulin function
-        ik = GlucoseSim.integrate_bolusInsulin(k,Ibolus, a_ins, b_ins, t, gamma)
+        ik = GlucoseSim.integrate_bolusInsulin(k,Ibolus, a_ins, b_ins, t, gamma) + GlucoseSim.integrate_basalInsulin(k, I, t, gamma)
         # estimated glucose given params, meals, and insulin
         mu = GlucoseSim.nextG_raw(Gb, gamma, hk, G_obs[k], mk, beta, ik)
         # estimated fluctuation around mu
@@ -78,14 +78,16 @@ def neg_log_likelihood(params, t, G_obs, Gmeal, Ibolus):
     return -ll
 
 # extract simulated patient
-t, G_obs, Gmeal, Ibolus = sim.t, sim.results.mean(axis = 1), sim.Gmeal, sim.Ibolus
+# sim.__dict__.keys()
+t, G_obs, Gmeal, Ibolus, I = sim.t, sim.results.mean(axis = 1), sim.Gmeal, sim.Ibolus, sim.Ibasal
 
 # subset 
 # N = 100
 # inds = np.sort(np.random.choice(range(len(t)), N, replace = False))
-inds = range(0,100)
-t, G_obs, Gmeal, Ibolus  = t[inds], G_obs[inds], Gmeal[inds], Ibolus[inds] 
+inds = range(60,200)
+t, G_obs, Gmeal, Ibolus, I  = t[inds], G_obs[inds], Gmeal[inds], Ibolus[inds], I[inds]
 
+plt.plot(t, G_obs)
 
 # # optimize b as function a
 # a_meal_actual, b_meal_actual, a_ins_actual, b_ins_actual = [sim.__dict__[x] for x in ['a_meal', 'b_meal', 'a_ins', 'b_ins']]
@@ -100,11 +102,9 @@ t, G_obs, Gmeal, Ibolus  = t[inds], G_obs[inds], Gmeal[inds], Ibolus[inds]
 #\\\\
 #\\\\
 
-plt.plot(t, G_obs)
-
 #                  Gb, sigma, gamma, a_meal, log_d_meal, a_ins, log_d_ins, beta
 # start_points = [140,     5,   .06,     .1,         -1,    .1,        -1,   50],
-start_points   = [150,     10,   .07,    .04,         -4,    .01,        -2,   100]
+start_points   = [145,     10,   .07,    .04,         -4,    .01,        -2,   100]
 
 #                Gb, sigma, gamma, a_meal, log_d_meal, a_ins, log_d_ins, beta
 bounds =  [(100,200),(5,15),(.06,.08),(.01,.07),(-100,5), (.001,.02),   (-100,5), (50,200)]
@@ -112,22 +112,22 @@ bounds =  [(100,200),(5,15),(.06,.08),(.01,.07),(-100,5), (.001,.02),   (-100,5)
 result = optimize.minimize(
     neg_log_likelihood,
     x0=start_points,
-    args=(t, G_obs, Gmeal, Ibolus),
+    args=(t, G_obs, Gmeal, Ibolus, I),
     bounds=bounds,
-    method='Nelder-Mead', options = {'maxiter':2_000, "adaptive": False}
+    method='Nelder-Mead', options = {'maxiter':3_000, "adaptive": True}
 )
 
-# result = optimize.differential_evolution(
-#     neg_log_likelihood, 
-#      x0=start_points,
-#     args=(t, G_obs, Gmeal, Ibolus),
-#     bounds=bounds, 
-#     workers = 1,
-#     maxiter=10,
-# )
+result = optimize.differential_evolution(
+    neg_log_likelihood, 
+     x0=start_points,
+    args=(t, G_obs, Gmeal, Ibolus, I),
+    bounds=bounds, 
+    workers = 1,
+    maxiter=100,
+)
 
+print(f"Minimization Successful: {result.success}")
 map_params = result.x
-map_params
 
 
 Gb, sigma, gamma, a_meal, log_d_meal, a_ins, log_d_ins, beta = map_params
@@ -144,7 +144,8 @@ fig, ax = plt.subplots(figsize = (10,8))
 ax.plot(t, G_obs, color = "orange", label = "Actual")
 new_sim.plot(ax = ax)
 ax.set_ylabel("Blood Glucose")
-
+ax.set_xlabel("Time")
+plt.title("Actual Versus Predicted Simulated Glucose Evolution")
 
 # RMSE
 np.sqrt(((sim.results[inds,:].mean(axis = 1) - new_sim.results.mean(axis = 1))**2).mean())
@@ -160,22 +161,16 @@ plt.axhline(0, color = "black")
 x = sim.results[inds,:].mean(axis = 1)
 y = new_sim.results.mean(axis = 1)
 
-MM = np.column_stack([np.ones(len(x)), x])
-
-intrcpt,slope = np.linalg.inv(MM.T@MM)@MM.T@y
+def lm(x,y):
+    MM = np.column_stack([np.ones(len(x)), x])
+    return np.linalg.inv(MM.T@MM)@MM.T@y
+    
+intrcpt,slope = lm(x,y)
 y_hat = intrcpt + slope * x
-
-
-# from sklearn.linear_model import LinearRegression
-# LR = LinearRegression()
-# LR.fit(x.reshape((-1,1)),y.reshape((-1,1)))
-# intrcpt,slope = LR.intercept_,LR.coef_
-# y_hat = intrcpt + slope * x
-
 
 fig, ax = plt.subplots(figsize = (10,10))
 ax.axline(xy1 = (140,140),slope =1, color = "black", linestyle = '--', alpha = .5)
 ax.scatter(x,y)
-ax.plot(x,y_hat.ravel())
+ax.plot(x,y_hat.ravel(), color = "orange")
 ax.set_xlabel("Actual")
 ax.set_ylabel("Predicted")

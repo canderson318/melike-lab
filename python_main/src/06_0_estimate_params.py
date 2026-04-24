@@ -32,7 +32,7 @@ local_output_path = WD/'outputs'
 sym_link(output_real_path, local_output_path)
 
 # set output directories
-out_dir = local_output_path/ "06"
+out_dir = local_output_path/ "06_0"
 out_dir.mkdir(exist_ok = True)
 
 # load simulation

@@ -1,9 +1,3 @@
-% Run:
-% cd /Users/canderson/Documents/school/local-melike-lab/melike-lab/data_assimilation_main/projects/T1DM/ 
-% srcmatlab T1D_moving_window_smoother
-
-% open repl
-% matlab -nodesktop
 
 %this scriot is to estimate parameters over a moving time interval of
 %length (ideally) 1-2 days and then predict bg level until the next event
@@ -82,7 +76,10 @@ my_settings.smoother.bineq = 0;
 my_settings.smoother.is_use_parallel = 1;
 my_settings.smoother.num_runs = 20;
 
-which_ind = find(strcmp(all_data.patient_id,pat));
+ which_ind = find(strcmp(all_data.patient_id, pat));                                                      
+if isempty(which_ind)                                                                                    
+    error("error: Patient not found.")                                                                                               
+end
 age = all_data.age(which_ind);
 sex = all_data.sex(which_ind);
 wt_kg = all_data.wt_kg(which_ind);
@@ -102,8 +99,6 @@ orig_data.raw_drivers.nutrition_oral(orig_data.raw_drivers.nutrition_oral.carbs 
 %+++ for different window params, loop over each of those windows and estimate smooth BG
 %+++ save ewach outer loop res to estimation table
 
-smoother_switch = true; %!!!!!!!!!!!! Remember to set !!!!!!!!!!!!
-
 interval_length = settings.smoother.window.size;
 interval_stride = settings.smoother.window.stride;
 
@@ -116,7 +111,7 @@ num_iter = @(tmax,interval,stride) 1  + (( tmax - interval ) / stride);
 num = floor(num_iter(max_t, interval_length, interval_stride));
 fprintf("\t%.0f windows for %.0fmin window size at a %.0fmin stride\n",num,interval_length, interval_stride)
 cumm_time = cumm_time + (interval_length*num); 
-fprintf("\t>>> %.0fmin total to model\n", cumm_time)
+fprintf("\t>>> %.0fmin total patient time to model\n", cumm_time)
 
 
 fprintf('\n**********************\nInterval Length: %.1fhr (%dmin)\tInterval Stride: %.1fhr (%dmin)\n**********************\n', interval_length/60, interval_length, interval_stride/60, interval_stride)
@@ -124,7 +119,14 @@ fprintf('\n**********************\nInterval Length: %.1fhr (%dmin)\tInterval Str
 % my_settings.model.which_time = which_time;
 
 % SET output directory;; IMPORTANT: do not let this be inside code repository.
-master_output_dir = fullfile(main_dir,strcat('moving_window_of_',num2str(interval_length),'mins_by_',num2str(interval_stride),'mins '));
+if isfield(settings, 'output_dir')
+    parent_output_dir = settings.output_dir    
+else
+    parent_output_dir = main_dir;
+end
+
+disp("Output Directory:")
+output_dir = fullfile( parent_output_dir,strcat('moving_window_of_',num2str(interval_length),'mins_by_',num2str(interval_stride),'mins '))
 
 
 %% Params for moving window --------------------
@@ -144,17 +146,22 @@ t_1 = orig_data.raw_measurements.time(closestIndex_1);
 
 % when to stop looping
 % time_end = orig_data.raw_measurements.time(1) + interval_length + 60*12; % run until hit this time: first time + windowsize + 6hours -> if stride is 1hr this will run on 6 windows
-% time_end = orig_data.raw_measurements.time(end); % run for all data
-time_end = 12*60 + interval_length % run for 12 hours
+num_windows = settings.smoother.window.num_windows
+if ~strcmp(num_windows, "all") &&  ~isnumeric( num_windows )
+    error(sprintf('%d is an invalid argument.\nUse "all" for all of the data or an integer for the number of windows to run.', num_windows))
+end
+% time_end = 12*60 + interval_length % run for 12 hours
 
+time_end = orig_data.raw_measurements.time(end); % run for all data
 counter = 1;
 data = orig_data;
 
-while t_1 <= time_end
+while t_1 <= time_end && (strcmp(num_windows, "all") | counter <= num_windows)
     
     fprintf('\n\t**********************\n\t\t(%.0f) Window: %.1fhr (%dmin) - %.1fhr (%dmin)\n\t**********************\n',i,t_0/60, t_0, t_1/60, t_1)
 
-    run_output_dir = fullfile(master_output_dir,pat,sprintf('smooth_%s_%s',int2str(t_0),int2str(t_1)));
+    
+    run_output_dir = fullfile(output_dir,pat,sprintf('smooth_%s_%s',int2str(t_0),int2str(t_1)));
 
     %find the time and value of the latest measurement before t_0
     indd = find(data.raw_measurements.time <= t_0);
@@ -175,11 +182,8 @@ while t_1 <= time_end
     my_settings.smoother.t_opt_end = t_1;
 
     % Run smoother 
-    if smoother_switch % switch to run smooth 
-        solver_dir = prep_main(data,my_settings,t_prior,DAtype,DAstate,run_output_dir,code_dir);
-        [output,~] = main(data,my_settings,t_prior,DAtype,DAstate,run_output_dir,code_dir,solver_dir);
-        
-    end
+    solver_dir = prep_main(data,my_settings,t_prior,DAtype,DAstate,run_output_dir,code_dir);
+    [output,~] = main(data,my_settings,t_prior,DAtype,DAstate,run_output_dir,code_dir,solver_dir);
 
     % reset data 
     data = orig_data;

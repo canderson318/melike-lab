@@ -32,16 +32,62 @@ Multi-patient parameter analysis. Loads summaries for all patients and outputs t
 - All params vs. time of day (colored by study day, linetype by patient)
 - Boxplots of params by study day with median overlay per patient
 
-## Utils (`src/lib/tools.py`)
+## Python → MATLAB Interface
+
+The smoother runs as a MATLAB subprocess launched from Python. Communication happens via `settings.json` written to the working directory before each run.
+
+### Flow
+
+```
+Python (00_0_run_smoother.py)
+  │
+  ├─ build settings dict (bounds, window config, patient, output_dir)
+  ├─ makeSettings(settings)  →  writes  ./settings.json
+  └─ runPatient("srcmatlab src/lib/T1D_moving_window_smoother.m")
+       └─ zsh -i -c srcmatlab ...
+            └─ matlab -batch "T1D_moving_window_smoother"
+                 └─ settings = jsondecode(fileread("settings.json"))
+                      ├─ reads pat, output_dir
+                      └─ reads smoother.bounds → lower/upper bounds for fmincon
+```
+
+### `settings.json` schema
+
+```json
+{
+  "pat": "SM001",
+  "output_dir": "/path/to/outputs/00_0/<bounds_string>/",
+  "smoother": {
+    "bounds": {
+      "Gb":    [0,    1000],
+      "gamma": [0.012, 0.035],
+      "sigma": [0,    100],
+      "a":     [0.01,  0.1],
+      "b":     [0.01,  0.1],
+      "beta":  [15,   130]
+    },
+    "window": {
+      "size":        360,
+      "stride":      180,
+      "num_windows": 1
+    }
+  }
+}
+```
+
+Bounds are consumed by `T1D_moving_window_smoother.m` as `lower_bounds`/`upper_bounds` passed to `fmincon`. If `smoother.bounds` is absent, MATLAB falls back to hardcoded defaults.
+
+### Key functions (`src/lib/tools.py`)
 
 | Function | Description |
 |---|---|
 | `mount_odrive(force=False)` | Mount OneDrive via rclone to `~/odrive/home` |
 | `sym_link(real_path, sym_path)` | Create symlink, replacing existing link/dir |
+| `makeSettings(settings)` | Serialize settings dict → `./settings.json` (read by MATLAB) |
+| `runPatient(command, settings=None)` | Optionally call `makeSettings`, then launch MATLAB via `zsh -i -c` |
+| `param_summary(parent_dir, window_set, pat)` | Load all `optimization_summary.mat` files for a patient/window, return DataFrame |
 | `mins_to_timestr(minutes)` | Minutes-since-midnight → `"HH:MM"` string(s) |
 | `timestr_to_mins(string)` | `"HH:MM"` string → minutes-since-midnight |
-| `setPatient(pat)` | Write patient ID to `PAT.txt` |
-| `runPatient(command, pat=None)` | Run MATLAB/Python script; sets patient first if `pat` given |
 
 ## Related
 

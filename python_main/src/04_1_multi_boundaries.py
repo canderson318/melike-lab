@@ -9,6 +9,7 @@ import subprocess as sp
 from src.lib.tools import *
 import re
 from scipy.io import matlab
+import json
 
 #\\\\
 # ── Setup ─────────────────────────────────────────────────────────────────────
@@ -29,8 +30,9 @@ local_output_path = WD/'outputs'
 sym_link(output_real_path, local_output_path)
 
 # set output directories
-out_dir = local_output_path/ "04_0"
+out_dir = local_output_path/ "04_1"
 out_dir.mkdir(exist_ok = True)
+
 
 
 #\\\\
@@ -39,9 +41,14 @@ out_dir.mkdir(exist_ok = True)
 #\\\\
 #\\\\
 
-# load summaries
-pats = [x for x in os.listdir(local_output_path/"param_summary") if x.startswith("SM")]
-summary = pd.concat([pd.read_csv(local_output_path/"param_summary"/pat/"summary.csv") for pat in pats])
+in_dirs = [ local_output_path / "00_0" / D for D in os.listdir(local_output_path/"00_0")]
+in_dir = in_dirs[0]
+
+# load settings
+smoother_settings = json.load(open(in_dir / "settings.json", 'r'))
+
+# load summary
+summary = pd.read_csv(in_dir/"param_summary.csv")
 
 # make shorter label
 summary['label'] = [re.sub(r".*moving_window_of_|_9_am_p.*", "", x) for x in summary.window_name]
@@ -51,7 +58,7 @@ project_dir = Path("/Users/canderson/odrive/home/melike-rotation/project001")
 patient_info = pd.read_csv(project_dir / "Tidepool_Exports/Tandem_Tidepool_Deidentified.csv")
 
 # fix timing
-start_dt_time = {pat: pd.Timestamp(patient_info.start_time[patient_info.patient_id == pat].iloc[0]) for pat in pats}
+start_dt_time = {pat: pd.Timestamp(patient_info.start_time[patient_info.patient_id == pat].iloc[0]) for pat in summary.pat.unique()}
 
 # add start_time to all timing
 summary["datetime"] = (
@@ -78,7 +85,7 @@ summary['minod'] = summary.datetime.dt.minute + summary.datetime.dt.hour*60
 summary.sort_values(by = ["pat","window_name", "datetime"],inplace = True)
 
 # subset for specific window    
-window_nm = "moving_window_of_360mins_by_180mins_9_am_pm"
+window_nm = "moving_window_of_360mins_by_180mins"
 window_set = summary.label[summary.window_name == window_nm].iloc[0]
 interval_width, interval_stride = [int(x) for x in re.findall(r'\d+',window_set)]
 SUB = summary.loc[summary.label == window_set].copy()
@@ -87,13 +94,17 @@ eps = SUB.gamma[SUB.gamma != 0].min()
 SUB['log_gamma'] = np.log(SUB.gamma + eps)
 
 # load settings
-smoother_dir = project_dir/f"Tidepool_Exports/{window_nm}/{summary.pat.values[0]}"
-first_window = os.listdir(smoother_dir)[0]
-ml_obj = matlab.loadmat(smoother_dir/first_window/"my_settings.mat")
+smoother_dir = in_dir/window_nm/summary.pat.values[0]
+ml_obj = matlab.loadmat(smoother_dir/os.listdir(smoother_dir)[0]/"my_settings.mat")
 settings = ml_obj['my_settings']
 par_names = np.array([str(x[0]) for x in settings['smoother'].item()["theta_est_names"][0][0][0]])
 lwr, uppr  = settings["smoother"].item()['lower_bounds'][0][0].ravel() , settings["smoother"].item()['upper_bounds'][0][0].ravel()
 par_bounds = {str(x):(lwr[i],uppr[i]) for i,x in enumerate(par_names)}
+
+if not {key:(val[0], val[1]) for key,val in smoother_settings.get("smoother").get("bounds").items()} ==  par_bounds:
+    raise ValueError("settings do not match.")
+
+param_string = "_".join([f"{x}{y[0]}_{y[1]}" for x,y in  smoother_settings.get("smoother").get("bounds").items()])
 
 #\\\\
 #\\\\
@@ -138,64 +149,11 @@ for i,col in enumerate(cols):
     axes[i].xaxis.set_major_formatter(mticker.FuncFormatter(lambda x, _: str(x)+":00"))
     plt.setp(axes[i].get_xticklabels(), rotation=45, ha="right")
 fig.tight_layout(rect = [0,0,1, 0.97])
-fig.suptitle("Parameters throughout the day", fontsize = 14, y = .999)
+fig.suptitle(f"Parameters throughout the day\n{param_string}", fontsize = 14, y = .999)
 plt.savefig(out_dir/'param_against_HROD_boxplots.pdf', bbox_inches = "tight")
 
 del LINE
 
-#\\\\
-#\\\\
-# ––– Plot param x day styled by patient
-#\\\\
-#\\\\
 
-
-LINE = SUB.copy()
-for col in cols:
-    new_var = col+"_median"
-    LINE[new_var] = (
-        LINE.groupby(["pat", "delta_day"])[col].transform("median")
-    )
-LINE = LINE.filter(regex = r"_median|pat|delta_day")
-
-fig, ax = plt.subplots(len(cols),1, figsize = fgsz)
-axes = ax.flatten()
-for i,col in enumerate(cols):
-    plt_SUB = SUB[~SUB[col].isna()]
-    plt_LINE = LINE[~LINE[col+"_median"].isna()]
-
-    if col in par_bounds.keys():
-        lwr,uppr = par_bounds[col]
-        rng = uppr-lwr
-        axes[i].axhspan(lwr, uppr, color="grey", alpha=0.1)
-        axes[i].axhline(y = lwr, color="grey", alpha=0.5, linestyle = "--")
-        axes[i].axhline(y = uppr, color="grey", alpha=0.5, linestyle = "--")
-        axes[i].set_ylim((lwr - .1*rng, uppr +.1*rng))
-
-    sns.boxplot(plt_SUB, x = "delta_day", y = col, hue = "pat", ax = axes[i])
-    sns.lineplot(plt_LINE, x = "delta_day", y = col+"_median", hue = "pat", ax = axes[i])
-    axes[i].set_xlabel("Day")
-    axes[i].set_ylabel(col.upper())
-    axes[i].set_title(f"{col.upper()}")
-    axes[i].legend(loc='upper right', title=' Pat', bbox_to_anchor=(1.11, 1.11))
-fig.tight_layout(rect = [0,0,1, 0.97])
-fig.suptitle("Parameters across study days", fontsize = 14, y = 1)
-plt.savefig(out_dir/'param_against_deltaday_boxplots.pdf')
-
-del LINE
-
-#\\\\
-#\\\\
-# ––– Correlation heatmap 
-#\\\\
-#\\\\
-
-corr_m = SUB.loc[:,cols].corr(method = 'spearman')
-corr = pd.DataFrame(corr_m, columns = cols.values, index = cols.values)
-
-fig,ax = plt.subplots(figsize = (10,10))
-sns.heatmap(corr, ax = ax, cmap = 'RdBu_r', vmin = -1, vmax = 1)
-plt.suptitle(f"Parameter Correlations (spearman)")
-plt.tight_layout()
-plt.savefig(out_dir/'param_corr_heamap.pdf')
-
+bg,insulin,nutrition=loadPatientData("SM012")
+bg.time.max()

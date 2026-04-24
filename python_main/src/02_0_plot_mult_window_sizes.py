@@ -37,7 +37,7 @@ sym_link(real_output_path, local_output_path)
 for pat in os.listdir(local_output_path/"param_summary"):
 
     # set output directory for this script 
-    out_dir = local_output_path/ "02" / pat
+    out_dir = local_output_path/ "02_0" / pat
     out_dir.mkdir(exist_ok = True,parents = True)
 
 

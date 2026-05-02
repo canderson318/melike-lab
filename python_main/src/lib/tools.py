@@ -9,6 +9,53 @@ from pprint import pprint
 import scipy.io as sio
 from concurrent.futures import ThreadPoolExecutor
 
+def estimate_blood_volume_dL(age: float, weight_kg: float, sex: str = None, height: float = None) -> float:
+    sex = (sex or "").lower().strip()
+    if sex in ("male", "m"):
+        sex_class = "male"
+    elif sex in ("female", "f"):
+        sex_class = "female"
+    else:
+        sex_class = "none"
+
+    height_m = float("nan")
+    if height is not None:
+        height_m = height / 100 if height > 3 else height
+
+    if age < 12:
+        ml_per_kg = 78
+    elif age < 18:
+        if sex_class == "male":
+            ml_per_kg = 78 - 0.5 * (age - 10)
+        elif sex_class == "female":
+            ml_per_kg = 75 - 0.8 * (age - 10)
+        else:
+            ml_per_kg = 76.5 - 0.65 * (age - 10)
+    else:
+        if sex_class == "male":
+            ml_per_kg = 75
+        elif sex_class == "female":
+            ml_per_kg = 65
+        else:
+            ml_per_kg = 70
+
+    if not np.isnan(height_m) and age >= 13:
+        H, W = height_m, weight_kg
+        if sex_class == "male":
+            BV_L = 0.3669 * H**3 + 0.03219 * W + 0.6041
+        elif sex_class == "female":
+            BV_L = 0.3561 * H**3 + 0.03308 * W + 0.1833
+        else:
+            BV_L = np.mean([
+                0.3669 * H**3 + 0.03219 * W + 0.6041,
+                0.3561 * H**3 + 0.03308 * W + 0.1833,
+            ])
+    else:
+        BV_L = weight_kg * ml_per_kg / 1000
+
+    return BV_L * 10
+
+
 def mount_odrive(force = False):
     '''Mount onedrive to home directory if not there.'''
     odrive_mountpoint = Path.home() / "odrive"
@@ -128,5 +175,7 @@ def param_summary(parent_dir , window_set, pat):
 
     # filter out nones where file not found
     rows = [x for x in rows if x is not None]
-    
-    return pd.DataFrame(rows).sort_values("interval_start").reset_index(drop=True)
+    df = pd.DataFrame(rows).sort_values("interval_start").reset_index(drop=True)
+    dtypes = {'interval_start': int, 'interval_end': int, 'Gb': float, 'gamma': float, 'sigma': float, 'a': float, 'b': float,'beta': float, 'beta_d': float, 'beta_n': float, 'rmse': float, 'fval': float, 'fval_per_meas': float, 'pat': str,'window_name':str}
+    df = df.astype(dtypes) 
+    return df

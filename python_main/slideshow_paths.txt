@@ -1,9 +1,5 @@
-outputs/03/SM001/param_against_interval_start.pdf
-outputs/03/SM001/param_corr_heamap.pdf
-outputs/03/SM001/param_pairplot.pdf
-outputs/03/SM002/param_against_interval_start.pdf
-outputs/03/SM002/param_corr_heamap.pdf
-outputs/03/SM002/param_pairplot.pdf
-outputs/04/param_against_HROD_boxplots.pdf
-outputs/04/param_against_deltaday_boxplots.pdf
-outputs/04/param_corr_heamap.pdf
+outputs/04_1/moving_window_of_360mins_by_180mins/Gb0_1000_gamma0.012_0.035_sigma0_100_a0.01_0.1_b0.01_0.1_beta15_130.pdf
+outputs/04_1/moving_window_of_360mins_by_180mins/Gb0_700_gamma0.012_0.035_sigma0_60_a0.001_0.1_b0.001_0.1_beta1_130.pdf
+outputs/04_1/moving_window_of_360mins_by_180mins/Gb0_700_gamma0.01_0.05_sigma0_60_a0.001_0.1_b0.001_0.1_beta10_200.pdf
+outputs/04_1/moving_window_of_360mins_by_180mins/Gb0_700_gamma0.01_0.05_sigma0_60_a0.001_0.1_b0.001_0.1_beta15_200.pdf
+outputs/04_1/moving_window_of_480mins_by_180mins/Gb0_700_gamma0.01_0.05_sigma0_60_a0.001_0.1_b0.001_0.1_beta10_200.pdf

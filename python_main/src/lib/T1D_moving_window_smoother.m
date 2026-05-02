@@ -7,7 +7,7 @@
 
 clear; clc;
 
-% patient to model 
+% patient to model
 settings = jsondecode(fileread("settings.json"));
 pat = settings.pat;
 
@@ -36,7 +36,7 @@ all_data.Properties.VariableNames = names;
 %% Modelling Preferences //////////////////////////////////////////////////////////
 setup_style = struct();
 setup_style.data = 't1dm'; % used in createModelSettings
-setup_style.model = 'OU_v1_T1D'; % used in createModelSettings 
+setup_style.model = 'OU_v1_T1D'; % used in createModelSettings
 setup_style.filter = 'EnKF_joint_v1';
 setup_style.simulator = 'OU_v1';
 setup_style.smoother = 'fmincon';
@@ -63,7 +63,7 @@ my_settings.smoother.theta_est_names = {'Gb','gamma','sigma','a','b','beta'};
 if isfield(settings.smoother,"bounds")
     my_settings.smoother.lower_bounds = [settings.smoother.bounds.Gb(1) settings.smoother.bounds.gamma(1) settings.smoother.bounds.sigma(1) settings.smoother.bounds.a(1) settings.smoother.bounds.b(1) settings.smoother.bounds.beta(1)]';
     my_settings.smoother.upper_bounds = [settings.smoother.bounds.Gb(2) settings.smoother.bounds.gamma(2) settings.smoother.bounds.sigma(2) settings.smoother.bounds.a(2) settings.smoother.bounds.b(2) settings.smoother.bounds.beta(2)]';
-else 
+else
     % defaults
     my_settings.smoother.lower_bounds = [0 0.0001 0 0.01 0.01 10]';
     my_settings.smoother.upper_bounds = [1000 0.5 100 0.1 0.1 120]';
@@ -76,9 +76,9 @@ my_settings.smoother.bineq = 0;
 my_settings.smoother.is_use_parallel = 1;
 my_settings.smoother.num_runs = 20;
 
- which_ind = find(strcmp(all_data.patient_id, pat));                                                      
-if isempty(which_ind)                                                                                    
-    error("error: Patient not found.")                                                                                               
+ which_ind = find(strcmp(all_data.patient_id, pat));
+if isempty(which_ind)
+    error("error: Patient not found.")
 end
 age = all_data.age(which_ind);
 sex = all_data.sex(which_ind);
@@ -104,13 +104,13 @@ interval_stride = settings.smoother.window.stride;
 
 fprintf("\n****** Number of windows summary ******\n")
 cumm_time = 0;
-% how many windows? 
+% how many windows?
 max_t = max(orig_data.raw_measurements.time);
-% numbner of iterations 
+% numbner of iterations
 num_iter = @(tmax,interval,stride) 1  + (( tmax - interval ) / stride);
 num = floor(num_iter(max_t, interval_length, interval_stride));
 fprintf("\t%.0f windows for %.0fmin window size at a %.0fmin stride\n",num,interval_length, interval_stride)
-cumm_time = cumm_time + (interval_length*num); 
+cumm_time = cumm_time + (interval_length*num);
 fprintf("\t>>> %.0fmin total patient time to model\n", cumm_time)
 
 
@@ -120,7 +120,7 @@ fprintf('\n**********************\nInterval Length: %.1fhr (%dmin)\tInterval Str
 
 % SET output directory;; IMPORTANT: do not let this be inside code repository.
 if isfield(settings, 'output_dir')
-    parent_output_dir = settings.output_dir    
+    parent_output_dir = settings.output_dir
 else
     parent_output_dir = main_dir;
 end
@@ -133,7 +133,7 @@ output_dir = fullfile( parent_output_dir,strcat('moving_window_of_',num2str(inte
 
 % patient window initial conditions
 %starting point of estimation interval
-t_0 = orig_data.raw_measurements.time(1); 
+t_0 = orig_data.raw_measurements.time(1);
 
 % end of interval
 tt = t_0+interval_length;
@@ -143,24 +143,42 @@ tt = t_0+interval_length;
 t_1 = orig_data.raw_measurements.time(closestIndex_1);
 
 %% Loop over windows
-
 % when to stop looping
-% time_end = orig_data.raw_measurements.time(1) + interval_length + 60*12; % run until hit this time: first time + windowsize + 6hours -> if stride is 1hr this will run on 6 windows
-num_windows = settings.smoother.window.num_windows
-if ~strcmp(num_windows, "all") &&  ~isnumeric( num_windows )
-    error(sprintf('%d is an invalid argument.\nUse "all" for all of the data or an integer for the number of windows to run.', num_windows))
-end
-% time_end = 12*60 + interval_length % run for 12 hours
+has_num_windows = isfield(settings.smoother.window, 'num_windows');
+has_max_time    = isfield(settings.smoother.window, 'max_time');
 
-time_end = orig_data.raw_measurements.time(end); % run for all data
+if ~has_num_windows && ~has_max_time
+    error("Provide num_windows (int or 'all') or max_time (int minutes or 'all') in settings.smoother.window.")
+end
+
+if has_num_windows
+    if has_max_time
+        warning('Both num_windows and max_time provided. Using num_windows.')
+    end
+    num_windows = settings.smoother.window.num_windows;
+    if ~strcmp(num_windows, "all") && ~isnumeric(num_windows)
+        error('%s is invalid. Use "all" or an integer for num_windows.', num_windows)
+    end
+    time_end = orig_data.raw_measurements.time(end);
+else
+    max_time = settings.smoother.window.max_time;
+    if ~strcmp(max_time, "all") && ~isnumeric(max_time)
+        error('%s is invalid. Use "all" or an integer (minutes) for max_time.', max_time)
+    end
+    num_windows = "all";
+    if strcmp(max_time, "all")
+        time_end = orig_data.raw_measurements.time(end);
+    else
+        time_end = orig_data.raw_measurements.time(1) + max_time;
+    end
+end
+
 counter = 1;
 data = orig_data;
 
-while t_1 <= time_end && (strcmp(num_windows, "all") | counter <= num_windows)
-    
+while t_1 <= time_end && (strcmp(num_windows, "all") || counter <= num_windows)
     fprintf('\n\t**********************\n\t\t(%.0f) Window: %.1fhr (%dmin) - %.1fhr (%dmin)\n\t**********************\n',i,t_0/60, t_0, t_1/60, t_1)
 
-    
     run_output_dir = fullfile(output_dir,pat,sprintf('smooth_%s_%s',int2str(t_0),int2str(t_1)));
 
     %find the time and value of the latest measurement before t_0
@@ -171,7 +189,7 @@ while t_1 <= time_end && (strcmp(num_windows, "all") | counter <= num_windows)
     %use this measurement value to pick initial point g_0
     my_settings.model.model_parameters.g0 = bg_val;
 
-    % subset data for time window 
+    % subset data for time window
     data.raw_drivers.nutrition_oral = data.raw_drivers.nutrition_oral((data.raw_drivers.nutrition_oral.time <= t_1),:);
     data.raw_drivers.insulin_basal = data.raw_drivers.insulin_basal((data.raw_drivers.insulin_basal.time <= t_1),:);
     data.raw_drivers.insulin_bolus = data.raw_drivers.insulin_bolus((data.raw_drivers.insulin_bolus.time <= t_1),:);
@@ -181,18 +199,18 @@ while t_1 <= time_end && (strcmp(num_windows, "all") | counter <= num_windows)
     my_settings.smoother.t_opt_start = t_0;
     my_settings.smoother.t_opt_end = t_1;
 
-    % Run smoother 
+    % Run smoother
     solver_dir = prep_main(data,my_settings,t_prior,DAtype,DAstate,run_output_dir,code_dir);
     [output,~] = main(data,my_settings,t_prior,DAtype,DAstate,run_output_dir,code_dir,solver_dir);
 
-    % reset data 
+    % reset data
     data = orig_data;
 
     % set next window_start as current_start + stride
     t_00 = t_0+interval_stride;
     [~,closestIndex_2] = min(abs(t_00-data.raw_measurements.time)); % patient obs near time
     t_0_new = data.raw_measurements.time(closestIndex_2); % new window start
-    
+
     if t_0_new == t_0 %there is no measurement in the interval t_0 to t_0+interval_stride
         t_0 = data.raw_measurements.time(closestIndex_2+1);
     else
@@ -209,7 +227,7 @@ while t_1 <= time_end && (strcmp(num_windows, "all") | counter <= num_windows)
             warning("Warning: index exceeds array length.")
             % break
             t_1 = inf;
-        else 
+        else
             t_0 = data.raw_measurements.time(closestIndex_1+1);
             clear closestIndex_1
             tt = t_0+interval_length;

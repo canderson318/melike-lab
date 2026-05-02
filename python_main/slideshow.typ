@@ -1,7 +1,7 @@
 //
-// find outputs/ -type f \( -name "*.pdf" -o -name "*.png" \) | sed "s|$(pwd)||"  > slideshow_paths.txt
+// find outputs/04_1 -type f \( -name "*.pdf" -o -name "*.png" \) | sed "s|$(pwd)||"  > slideshow_paths.txt
 // | sed 's/.*/"&",/'
-// typst compile slide-show.typ 
+// typst compile slideshow.typ 
 //
 
 #let slide(body) = {

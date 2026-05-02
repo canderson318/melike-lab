@@ -25,7 +25,8 @@ os.chdir(WD)
 mount_odrive()
 
 # link outputs it to this directory
-output_real_path = '/Users/canderson/odrive/home/melike-rotation/project001/outputs/'
+project_dir = Path("/Users/canderson/odrive/home/melike-rotation/project001")
+output_real_path = project_dir/'outputs/'
 os.listdir(output_real_path)
 local_output_path = WD/'outputs'
 
@@ -35,42 +36,74 @@ sym_link(output_real_path, local_output_path)
 out_dir = local_output_path/ "06_1"
 out_dir.mkdir(exist_ok = True)
 
-# load data
+#\\\\\
+#\\\\\
+# –––– Load Patient Data
+#\\\\\
+#\\\\\
+patient_info = pd.read_csv(project_dir / "Tidepool_Exports/Tandem_Tidepool_Deidentified.csv")
+
 pat = "SM002"
+pat_info = {k:v.get(1) for k,v in dict(patient_info[patient_info.patient_id == pat]).items()}
+
 bg, ins, nut = loadPatientData(pat)
 
-nut.carbs = nut.carbs * 1000
+# match matlab t1dm case
+nut = nut[nut.carbs.notna() & (nut.carbs != 0)].copy()
+nut.carbs *= 1000  # g → mg
 
-tol = 30
-dat = pd.merge_asof(bg,ins,on = 'time', direction = 'nearest', tolerance = tol)
-dat = pd.merge_asof(dat,nut,on = 'time', direction = 'nearest', tolerance = tol)
+ins_basal = ins[ins.Basal.notna()][['time', 'Basal']].copy()
+ins_bolus = ins[ins.Bolus.notna() & (ins.Bolus != 0)][['time', 'Bolus']].copy()
+bg = bg[bg.bg.notna()].copy()
+
+# unified time index — union of all event times
+all_times = sorted(set(bg.time) | set(ins_basal.time) | set(ins_bolus.time) | set(nut.time))
+dat = pd.DataFrame({'time': all_times})
+
+# bg: NaN where no measurement (don't interpolate)
+dat = dat.merge(bg[['time', 'bg']], on='time', how='left')
+# basal: piecewise constant — forward-fill between rate changes
+dat = dat.merge(ins_basal, on='time', how='left')
+dat['Basal'] = dat['Basal'].ffill().fillna(0)
+# bolus: event-based — 0 between events
+dat = dat.merge(ins_bolus, on='time', how='left')
+dat['Bolus'] = dat['Bolus'].fillna(0)
+# carbs: event-based — 0 between meals
+dat = dat.merge(nut[['time', 'carbs']], on='time', how='left')
+dat['carbs'] = dat['carbs'].fillna(0)
+
 dat['time_hr'] = dat['time'] / 60
 dat['time_day'] = dat['time_hr'] / 24
 
+par_summ = param_summary(Path("outputs/00_0/Gb0_1000_gamma0.012_0.035_sigma0_100_a0.01_0.1_b0.01_0.1_beta15_130/"),pat="SM001",window_set = "moving_window_of_360mins_by_180mins")
+window = (1001,1361)
+pars = par_summ[(par_summ.interval_start == window[0]) &  (par_summ.interval_end == window[1])]
+
+SUB = dat[(dat.time>=window[0]) & (dat.time<= window[1])]
 
 fig, ax = plt.subplots(3,1,figsize = (15,10))
-sns.lineplot(dat, x="time_day", y="bg", ax=ax[0])
+sns.lineplot(SUB, x="time_day", y="bg", ax=ax[0])
 ax[0].set_ylabel("Glucose", color="steelblue")
 ax[0].tick_params(axis='y', labelcolor="steelblue")
-ax[0].set_xlim((0,dat.time_day.max()))
+ax[0].set_xlim((SUB.time_day.min(), SUB.time_day.max()))
 ax[0].set_xlabel("")
 
-ax[1].bar(dat['time_day'], dat['carbs'], color='orange', width=0.01, label='Carbs',alpha = .3)
+ax[1].step(SUB['time_day'], SUB['carbs'], color='orange', label='Carbs',alpha = .8)
 ax[1].set_ylabel('Carbs', color="orange")
 ax[1].tick_params(axis='y', labelcolor='orange')
-ax[1].set_xlim((0,dat.time_day.max()))
+ax[1].set_xlim((SUB.time_day.min(), SUB.time_day.max()))
 ax[1].set_xlabel("")
 
-ax[2].plot(dat['time_day'], dat['Basal'], color='green', label='Basal', alpha = .3)
+ax[2].step(SUB['time_day'], SUB['Basal'], color='green', label='Basal', alpha = .8)
 ax[2].set_ylabel('Basal Insulin', color="green")
 ax[2].tick_params(axis='y', labelcolor='green')
 
-ax[2].scatter(dat['time_day'], dat['Bolus'], color='green', label='Bolus', alpha = 1,  s= 50)
+ax[2].scatter(SUB['time_day'], SUB['Bolus'], color='green', label='Bolus', alpha = 1,  s= 50)
 ax[2].set_ylabel("Bolus Insulin", color = "green")
 ax[2].tick_params(axis = "y", labelcolor = "green")
 
 ax[2].set_xlabel("")
-ax[2].set_xlim((0,dat.time_day.max()))
+ax[2].set_xlim((SUB.time_day.min(), SUB.time_day.max()))
 ax[2].legend()
 
 [ax[i].xaxis.set_major_locator(plt.MultipleLocator(.5)) for i in range(3)]
@@ -78,6 +111,36 @@ plt.suptitle(f"{pat} Glucose evolution", y=1, fontsize=14)
 plt.tight_layout()
 plt.xlabel("Day")
 plt.savefig(out_dir/f"{pat}_glucose_evolution.png")
+
+
+# \\\\
+# \\\\
+# –––– Compare simulation to matlab estimates
+# \\\\
+# \\\\
+
+BV = estimate_blood_volume_dL(age = pat_info.get("age"), weight_kg = pat_info.get('weight_kg'), height = pat_info.get("height_cm"), sex = pat_info.get("sex")) * 30
+par_dict = {key:val.item() for key,val in dict(pars).items()}
+sim = GlucoseSim(
+    t = SUB.time.values, Gb = par_dict.get("Gb"),sigma = par_dict.get("sigma"),gamma = par_dict.get("gamma"),
+    Gmeal = SUB['carbs'].values/BV,b_meal=par_dict.get("b"), a_meal = par_dict.get("a"), 
+    Ibolus = SUB['Bolus'].values/BV, beta=par_dict.get("beta"), a_ins = 0.01, b_ins = 0.02)
+sim.run(num_sim=10)
+
+fig, ax = plt.subplots(figsize = (10,10))
+ax.plot(SUB['time'], SUB['bg'])
+
+df = pd.DataFrame(sim.results)
+mean_G = df.mean(axis=1)
+std_G  = df.std(axis=1)
+if ax is None:
+    fig, ax = plt.subplots()
+color = kwargs.pop('color', 'steelblue')
+ax.plot(sim.t,mean_G, label='mean', color=color, **kwargs)
+ax.fill_between(sim.t, mean_G - std_G, mean_G + std_G,
+                alpha=0.3, color=color, label='±1 SD')
+ax.legend(loc = "upper left", framealpha = 1,bbox_to_anchor=(1.15, 1))
+
 
 #\\\\
 #\\\\

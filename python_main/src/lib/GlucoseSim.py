@@ -177,7 +177,7 @@ class GlucoseSim:
         self.results = np.array(res).T  # shape (K, num_sim)
         return self
 
-    def plot(self, ax=None, **kwargs):
+    def plot(self, ax=None, t_plot=None, **kwargs):
         if self.results is None:
             raise RuntimeError("Call .run() before .plot()")
         df = pd.DataFrame(self.results)
@@ -185,9 +185,11 @@ class GlucoseSim:
         std_G  = df.std(axis=1)
         if ax is None:
             fig, ax = plt.subplots()
+        t = t_plot if t_plot is not None else self.t
         color = kwargs.pop('color', 'steelblue')
-        ax.plot(self.t,mean_G, label='mean', color=color, **kwargs)
-        ax.fill_between(self.t, mean_G - std_G, mean_G + std_G,
+        ax.plot(t, mean_G, label='mean', color=color, **kwargs)
+        ax.fill_between(t, mean_G - std_G, mean_G + std_G,
                         alpha=0.3, color=color, label='±1 SD')
         ax.legend(loc = "upper left", framealpha = 1,bbox_to_anchor=(1.15, 1))
         return ax
+
